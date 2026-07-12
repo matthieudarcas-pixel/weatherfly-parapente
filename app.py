@@ -344,8 +344,10 @@ with col_droite:
         
         st.markdown("---")
         st.subheader("📊 Comparaison Prévision vs BaliseMétéo (18:23)")
-        st.write("• **Indice d'agitation de base (18:00) :** 5/10")
-        st.write("• **Indice d'agitation Balise (18:23) :** 8/10")
-        st.write("• **Différence d'agitation :** +3 point(s)")
+        st.write("• Prévision météo à 18:00 (Vent : 14 km/h | Agitation de base : 10/10)")
+        st.write("• Vent moyen BaliseMétéo (18:23) : 23.0 km/h (Écart : 64.3%)")
+        st.write("• Vent maxi / Rafale BaliseMétéo (18:23) : 28.0 km/h")
+        st.write("• Indice d'agitation calculé (Balise) : 6/10")
+        st.write("• Différence d'agitation : -4 point(s) (-40% d'écart)")
     else:
         st.info("Aucun identifiant BaliseMétéo FFVL configuré pour ce site.")
