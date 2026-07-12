@@ -209,7 +209,6 @@ with col_gauche:
             vent_max_autorise = 15 if ploufs < 20 else (20 if ploufs <= 40 else 26)
             seuil_agitation_max = 6 if ploufs < 20 else (8 if ploufs <= 40 else 10)
             
-            # Recherche de l'indice de base à 18:00
             indice_base_18 = None
             prev_18_vitesse = None
             for i in range(len(hourly_data["time"])):
@@ -298,9 +297,7 @@ with col_gauche:
             
             mesure_ffvl_moy = 23.0
             mesure_ffvl_max = 28.0
-            # Delta rafale mesuré sur balise = 28 - 23 = 5
             delta_balise = max(0, mesure_ffvl_max - mesure_ffvl_moy)
-            # On conserve le même terme CAPE estimé ou 0 pour l'instantané si non fourni
             cape_estime = 0 
             indice_agitation_balise = min(10, round((delta_balise / 3) + (mesure_ffvl_moy / 5) + (cape_estime / 200)))
             
@@ -322,7 +319,14 @@ with col_gauche:
 
 with col_droite:
     st.subheader("Guide des Règles Intégrées")
-    st.markdown("**LIMITES DE VENT & RÈGLES**...")
+    st.markdown("""
+    **LIMITES DE VENT & RÈGLES DE SÉCURITÉ :**
+    - **Pilote Débutant (< 20 ploufs) :** Vent max 15 km/h, tolérance agitation max 6/10.
+    - **Pilote en Progression (20 à 40 ploufs) :** Vent max 20 km/h, tolérance agitation max 8/10.
+    - **Pilote Confirmé (> 40 ploufs) :** Vent max 26 km/h, tolérance agitation max 10/10.
+    - **Orientation du vent :** Doit correspondre à l'axe du décollage (±45°).
+    - **Vent de Sud :** Interdit ou limité à 10 km/h sur les sites sensibles (ex: Port de Lers).
+    """)
     
     ffvl_id = spot_config.get("balise_ffvl_id")
     if ffvl_id:
