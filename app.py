@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 # --- CONFIGURATION DE LA PAGE STREAMLIT ---
 st.set_page_config(page_title="WeatherFly - Assistant Vol Libre", layout="wide")
 
-# --- BASE DE DONNÉES PROPRE ET VÉRIFIÉE (ID DE BALISES FFVL CORRIGÉS OU LAISSÉS À VIDE SI INCONNUS) ---
+# --- BASE DE DONNÉES PROPRE ET VÉRIFIÉE (ID DE BALISES FFVL NETTOYÉS) ---
 SPOTS_HIERARCHIE = {
     "Occitanie": {
         "09 - Ariège": {
@@ -147,29 +147,33 @@ def formater_fenetres(heures_valides, data_par_heure):
             resultats_txt.append(f"• {h_debut}:00 à {h_fin+1}:00 (Vent : {fourchette_v} | Agitation : {fourchette_i})")
     return resultats_txt
 
-def recuperer_releves_ffvl(balise_id):
-    """Interroge les flux JSON officiels de la FFVL pour le temps réel."""
-    if not balise_id:
-        return None
+@st.cache_data(ttl=600)
+def charger_toutes_les_balises():
+    """Charge et met en cache le fichier global pour éviter les latences répétées."""
     url_releves = "https://data.ffvl.fr/json/relevesmeteo.json"
     try:
         req = urllib.request.Request(url_releves, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req, timeout=10) as response:
-            data = json.loads(response.read().decode())
-            str_id = str(balise_id)
-            if str_id in data:
-                return data[str_id]
-            for k, v in data.items():
-                if str_id.lower() in str(k).lower():
-                    return v
+            return json.loads(response.read().decode())
     except Exception:
-        pass
+        return {}
+
+def recuperer_releves_ffvl(balise_id):
+    if not balise_id:
+        return None
+    data = charger_toutes_les_balises()
+    str_id = str(balise_id)
+    if str_id in data:
+        return data[str_id]
+    for k, v in data.items():
+        if str_id.lower() in str(k).lower():
+            return v
     return None
 
 def recuperer_vraie_meteo(lat, lon, date_str):
     url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&start_date={date_str}&end_date={date_str}&hourly=temperature_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,cape&wind_speed_unit=kmh&timezone=Europe%2FParis"
     try:
-        req_om = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        req_om = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/20'})
         with urllib.request.urlopen(req_om, timeout=20) as response:
             data = json.loads(response.read().decode())
             return data.get("hourly", {})
@@ -367,7 +371,7 @@ with col_droite:
     est_aujourdhui = (date_selectionnee == datetime.now().strftime("%Y-%m-%d"))
     if est_aujourdhui:
         st.markdown("---")
-        st.subheader("📡 Relevé Balise FFVL (En direct)")
+        st.subheader("📡 Relevé Balise (En direct)")
         if spot_config.get("balise_ffvl_id"):
             releve_actuel = recuperer_releves_ffvl(spot_config["balise_ffvl_id"])
             if releve_actuel:
@@ -377,4 +381,4 @@ with col_droite:
             else:
                 st.warning("Impossible de joindre les relevés en direct pour cette balise.")
         else:
-            st.info("Aucune balise FFVL n'est associée à ce site dans la base nettoyée.")
+            st.info("Aucune balise n'est associée à ce site.")
