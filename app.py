@@ -1,5 +1,7 @@
 import streamlit as st
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util import Retry
 from datetime import datetime, timedelta
 
 # --- CONFIGURATION DE LA PAGE STREAMLIT ---
@@ -86,11 +88,17 @@ def formater_fenetres(heures_valides, data_par_heure):
 
 def recuperer_vraie_meteo(lat, lon, date_str):
     url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&start_date={date_str}&end_date={date_str}&hourly=temperature_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,cape&wind_speed_unit=kmh&timezone=Europe%2FParis"
+    
+    # Configuration d'une session avec auto-retry en cas d'instabilité réseau
+    session = requests.Session()
+    retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
+    session.mount('https://', HTTPAdapter(max_retries=retries))
+    
     try:
-        resp = requests.get(url, timeout=15)
+        resp = session.get(url, timeout=15)
         return resp.json().get("hourly", {})
     except Exception as e:
-        st.error(f"Impossible de joindre l'API météo : {e}")
+        st.error(f"Impossible de joindre l'API météo après plusieurs essais : {e}")
         return {}
 
 # --- INTERFACE UTILISATEUR (STREAMLIT) ---
@@ -119,7 +127,8 @@ with col_gauche:
     st.subheader("Verdict Météo & Aérologie")
     
     if analyser_clic:
-        hourly_data = recuperer_vraie_meteo(spot_config["lat"], spot_config["lon"], date_selectionnee)
+        with st.spinner("Interrogation des serveurs météo..."):
+            hourly_data = recuperer_vraie_meteo(spot_config["lat"], spot_config["lon"], date_selectionnee)
         
         if hourly_data and "time" in hourly_data:
             heures_valides_int = []
