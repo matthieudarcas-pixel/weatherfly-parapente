@@ -427,9 +427,5 @@ with col_droite:
     **TOLÉRANCE D'ORIENTATION**
     • Axe du vent toléré jusqu'à 45° max de l'orientation du déco
     • Au-delà de 5 km/h de vent, tout axe hors plage invalide l'heure
-
-    **RÈGLES PARTICULIÈRES SITES**
-    • Sites sensibles au vent de Sud > 10 km/h = DANGER
-    • Précipitations > 0.1 mm = Vol interdit
     """
     st.markdown(regles_contenu)
