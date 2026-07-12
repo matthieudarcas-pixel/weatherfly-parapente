@@ -147,19 +147,6 @@ def formater_fenetres(heures_valides, data_par_heure):
             resultats_txt.append(f"• {h_debut}:00 à {h_fin+1}:00 (Vent : {fourchette_v} | Agitation : {fourchette_i})")
     return resultats_txt
 
-@st.cache_data(ttl=300)
-def recuperer_releves_spotair(balise_id):
-    """Interroge l'API temps réel de SpotAiR pour une balise FFVL."""
-    if not balise_id:
-        return None
-    url = f"https://data.spotair.mobi/wind/ffvl/{balise_id}"
-    try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=8) as response:
-            return json.loads(response.read().decode())
-    except Exception:
-        return None
-
 def recuperer_vraie_meteo(lat, lon, date_str):
     url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&start_date={date_str}&end_date={date_str}&hourly=temperature_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,cape&wind_speed_unit=kmh&timezone=Europe%2FParis"
     try:
@@ -361,15 +348,8 @@ with col_droite:
     est_aujourdhui = (date_selectionnee == datetime.now().strftime("%Y-%m-%d"))
     if est_aujourdhui:
         st.markdown("---")
-        st.subheader("📡 Relevé Balise SpotAiR (En direct)")
+        st.subheader("📡 Relevé Balise (En direct)")
         if spot_config.get("balise_ffvl_id"):
-            releve_actuel = recuperer_releves_spotair(spot_config["balise_ffvl_id"])
-            if releve_actuel:
-                st.write(f"• **Vent moyen** : {releve_actuel.get('v', releve_actuel.get('vent_moy', 'N/A'))} km/h")
-                st.write(f"• **Rafales** : {releve_actuel.get('vent_raf', 'N/A')} km/h")
-                st.write(f"• **Direction** : {releve_actuel.get('d', releve_actuel.get('vent_dir', 'N/A'))}°")
-            else:
-                st.warning(f"Données directes non disponibles pour la balise ID {spot_config.get('balise_ffvl_id')}.")
-                st.markdown(f"👉 [Consulter la balise sur SpotAiR](https://www.spotair.mobi/wind/ffvl/{spot_config.get('balise_ffvl_id')})")
+            st.markdown(f"👉 [Consulter la balise en direct sur BaliseMétéo](https://www.balisemeteo.com/balise.php?idBalise={spot_config.get('balise_ffvl_id')})")
         else:
             st.info("Aucune balise n'est associée à ce site.")
