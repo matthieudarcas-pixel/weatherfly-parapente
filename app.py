@@ -143,53 +143,6 @@ def formater_fenetres(heures_valides, data_par_heure):
             resultats_txt.append(f"• {h_debut}:00 à {h_fin+1}:00 (Vent : {fourchette_v} | Agitation : {fourchette_i})")
     return resultats_txt
 
-@st.cache_data(ttl=300)
-def recuperer_releve_pioupiou_live(pioupiou_id):
-    if not pioupiou_id: return None
-    try:
-        url = f"https://api.pioupiou.fr/v1/live/{pioupiou_id}"
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=6) as response:
-            return json.loads(response.read().decode()).get("data", {})
-    except Exception:
-        return None
-
-@st.cache_data(ttl=900)
-def recuperer_archives_pioupiou_heure(pioupiou_id, date_str):
-    if not pioupiou_id: return {}
-    try:
-        dt_jour = datetime.strptime(date_str, "%Y-%m-%d")
-        start = dt_jour.strftime("%Y-%m-%dT00:00:00Z")
-        stop = dt_jour.strftime("%Y-%m-%dT23:59:59Z")
-        url = f"https://api.pioupiou.fr/v1/archive/{pioupiou_id}?start={start}&stop={stop}"
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=12) as response:
-            data_arr = json.loads(response.read().decode()).get("data", [])
-            if not data_arr: return {}
-            bucket = {}
-            for entry in data_arr:
-                ts = entry.get("timestamp")
-                if not ts: continue
-                h = datetime.fromisoformat(ts.replace("Z", "+00:00")).hour
-                v = entry.get("wind_speed_avg")
-                r = entry.get("wind_speed_max")
-                d = entry.get("wind_direction")
-                if v is not None:
-                    if h not in bucket: bucket[h] = {"v": [], "r": [], "d": []}
-                    bucket[h]["v"].append(v)
-                    if r is not None: bucket[h]["r"].append(r)
-                    if d is not None: bucket[h]["d"].append(d)
-            resultats = {}
-            for h, vals in bucket.items():
-                resultats[h] = {
-                    "vitesse": round(sum(vals["v"]) / len(vals["v"])),
-                    "rafale": round(sum(vals["r"]) / len(vals["r"])) if vals["r"] else round(sum(vals["v"]) / len(vals["v"])),
-                    "direction": round(sum(vals["d"]) / len(vals["d"])) if vals["d"] else "N/A"
-                }
-            return resultats
-    except Exception:
-        return {}
-
 def recuperer_vraie_meteo(lat, lon, date_str):
     url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&start_date={date_str}&end_date={date_str}&hourly=temperature_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,cape&wind_speed_unit=kmh&timezone=Europe%2FParis"
     try:
@@ -243,10 +196,10 @@ with col_gauche:
     with col_chk2: m_face = st.checkbox("Face voile (>15km/h)", key="face_chk")
         
     analyser_clic = st.button("RECHERCHER ET ANALYSER", type="primary", key="btn_analyser")
-    st.subheader("Verdict Météo & Aérologie")
+    st.subheader("Verdict Météo & Aerologie")
     
     if analyser_clic:
-        with st.spinner("Interrogation des serveurs météo..."):
+        with st.spinner("Interrogation des serveurs meteo..."):
             hourly_data = recuperer_vraie_meteo(spot_config["lat"], spot_config["lon"], date_selectionnee)
         if hourly_data and "time" in hourly_data:
             heures_valides_int = []
@@ -255,7 +208,6 @@ with col_gauche:
             historique_vents = []
             vent_max_autorise = 15 if ploufs < 20 else (20 if ploufs <= 40 else 26)
             seuil_agitation_max = 6 if ploufs < 20 else (8 if ploufs <= 40 else 10)
-            profil = "Débutant" if ploufs < 20 else ("Progression" if ploufs <= 40 else "Confirmé")
 
             for i in range(len(hourly_data["time"])):
                 heure_texte = hourly_data["time"][i].split("T")[1][:5]
@@ -311,7 +263,7 @@ with col_gauche:
                     historique_vents.append(f"• {heure_texte} : {cause_heure}")
                 else:
                     heures_valides_int.append(heure_int)
-                    data_par_heure[heure_int] = {"vitesse": vitesse, "indice": indice_agitation, "raw_speed": hourly_data["wind_speed_10m"][i]}
+                    data_par_heure[heure_int] = {"vitesse": vitesse, "indice": indice_agitation}
 
             liste_fenetres = formater_fenetres(heures_valides_int, data_par_heure)
             if liste_fenetres:
@@ -321,10 +273,10 @@ with col_gauche:
                 st.error("🛑 FEU ROUGE : RESTE AU SOL")
                 for cause in facteurs_limitants: st.write(f"• {cause}")
                 
-            # --- COMPARAISON AVEC LA MESURE INSTANTANÉE DE 18:23 (23 km/h / 28 km/h max) ---
+            # --- COMPARAISON AVEC LA MESURE INSTANTANÉE BALISEMÉTÉO (18:23) ---
             st.markdown("---")
-            st.subheader("📊 Comparaison Prévision vs Mesure (18:23)")
-            # On cherche la prévision pour 18:00
+            st.subheader("📊 Comparaison Prévision vs BaliseMétéo (18:23)")
+            
             prev_18_vitesse = None
             for i in range(len(hourly_data["time"])):
                 h_txt = hourly_data["time"][i].split("T")[1][:5]
@@ -332,14 +284,17 @@ with col_gauche:
                     prev_18_vitesse = hourly_data["wind_speed_10m"][i]
                     break
             
-            mesure_reelle_moy = 23.0
-            mesure_reelle_max = 28.0
+            # Valeurs relevées sur l'image BaliseMétéo à 18:23
+            mesure_ffvl_moy = 23.0
+            mesure_ffvl_max = 28.0
             
             if prev_18_vitesse is not None:
-                diff_moy = ((mesure_reelle_moy - prev_18_vitesse) / prev_18_vitesse) * 100
+                diff_moy = ((mesure_ffvl_moy - prev_18_vitesse) / prev_18_vitesse) * 100
+                diff_max = ((mesure_ffvl_max - prev_18_vitesse) / prev_18_vitesse) * 100
+                
                 st.write(f"• Prévision météo à 18:00 : {round(prev_18_vitesse, 1)} km/h")
-                st.write(f"• Mesure réelle (18:23) : {mesure_reelle_moy} km/h")
-                st.write(f"• **Écart vent moyen :** {round(diff_moy, 1)}%")
+                st.write(f"• Vent moyen BaliseMétéo (18:23) : {mesure_ffvl_moy} km/h (Écart : {round(diff_moy, 1)}%)")
+                st.write(f"• Vent maxi / Rafale BaliseMétéo (18:23) : {mesure_ffvl_max} km/h (Écart : {round(diff_max, 1)}%)")
             else:
                 st.info("Pas de prévision horaire exacte disponible pour 18:00.")
     else:
@@ -349,31 +304,10 @@ with col_droite:
     st.subheader("Guide des Règles Intégrées")
     st.markdown("**LIMITES DE VENT & RÈGLES**...")
     
-    est_aujourdhui = (date_selectionnee == datetime.now().strftime("%Y-%m-%d"))
-    if est_aujourdhui:
+    ffvl_id = spot_config.get("balise_ffvl_id")
+    if ffvl_id:
         st.markdown("---")
-        st.subheader("📡 Relevé Pioupiou (Temps réel & Moyennes)")
-        
-        piou_id = spot_config.get("pioupiou_id")
-        if piou_id:
-            live_data = recuperer_releve_pioupiou_live(piou_id)
-            if live_data and live_data.get('wind_speed_avg') is not None:
-                st.markdown("**Dernière mesure instantanée :**")
-                st.write(f"• Vent moyen : {live_data.get('wind_speed_avg')} km/h")
-                st.write(f"• Rafales : {live_data.get('wind_speed_max', 'N/A')} km/h")
-                st.write(f"• Direction : {live_data.get('wind_direction', 'N/A')}°")
-            else:
-                st.warning("Mesure instantanée indisponible.")
-            
-            archives_dict = recuperer_archives_pioupiou_heure(piou_id, date_selectionnee)
-            if archives_dict:
-                st.markdown("**Moyennes horaires du jour :**")
-                for h in sorted(archives_dict.keys()):
-                    m = archives_dict[h]
-                    st.write(f"• **{h:02d}:00** - Vent : {m['vitesse']} km/h | Rafales : {m['rafale']} km/h")
-            else:
-                st.info("Aucune archive horaire disponible pour l'instant.")
-                
-            st.markdown(f"👉 [Consulter sur OpenWindMap](https://www.openwindmap.org/pioupiou-{piou_id})")
-        else:
-            st.info("Aucun identifiant Pioupiou configuré pour ce site.")
+        st.subheader("📡 Lien BaliseMétéo FFVL")
+        st.markdown(f"👉 [Consulter la balise {ffvl_id} sur BaliseMétéo](https://www.balisemeteo.com/balise.php?idBalise={ffvl_id})")
+    else:
+        st.info("Aucun identifiant BaliseMétéo FFVL configuré pour ce site.")
