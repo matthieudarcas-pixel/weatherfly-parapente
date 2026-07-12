@@ -87,7 +87,7 @@ def formater_fenetres(heures_valides, data_par_heure):
 def recuperer_vraie_meteo(lat, lon, date_str):
     url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&start_date={date_str}&end_date={date_str}&hourly=temperature_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,cape&wind_speed_unit=kmh&timezone=Europe%2FParis"
     try:
-        resp = requests.get(url, timeout=5)
+        resp = requests.get(url, timeout=15)
         return resp.json().get("hourly", {})
     except Exception as e:
         st.error(f"Impossible de joindre l'API météo : {e}")
