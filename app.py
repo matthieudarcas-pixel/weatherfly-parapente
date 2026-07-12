@@ -1,7 +1,4 @@
-# Let's generate a comprehensive Python file with a structured database of French paragliding sites sorted by region and department, and save it as app.py.
-# We will use Python code via ds_python_interpreter as required by instructions.
-
-app_code = '''import streamlit as st
+import streamlit as st
 import urllib.request
 import json
 from datetime import datetime, timedelta
@@ -9,8 +6,7 @@ from datetime import datetime, timedelta
 # --- CONFIGURATION DE LA PAGE STREAMLIT ---
 st.set_page_config(page_title="WeatherFly - Assistant Vol Libre", layout="wide")
 
-# --- BASE DE DONNÉES STRUCTURÉE DES SITES PARAPENTE (PAR RÉGION ET DÉPARTEMENT) ---
-# Format : { "Nom de la Région": { "Département (Num - Nom)": { "Nom du Spot": { "lat": ..., "lon": ..., "deco": "...", "interdit_sud": ..., "conseil_site": "..." } } } }
+# --- BASE DE DONNÉES STRUCTURÉE DES SITES PARAPENTE (AVEC RÈGLES SPÉCIFIQUES) ---
 SPOTS_HIERARCHIE = {
     "Occitanie": {
         "09 - Ariège": {
@@ -69,7 +65,7 @@ SPOTS_HIERARCHIE = {
                 "conseil_site": "Vallée cérdane ventée, attention aux thermiques catabatiques et aux brises d'est."
             },
             "Planès": {
-                "lat": 42.4833, "lon": 2.1500, "deco": "S", "interdit_sud": False,
+                "lat": 42.4833, "lon": 2.1500, "deco": "S", "interdit_sud": True,
                 "conseil_site": "Déco typique de montagne. Bien analyser l'ensoleillement et l'heure de déclenchement."
             }
         }
@@ -157,7 +153,7 @@ SPOTS_HIERARCHIE = {
     "Nouvelle-Aquitaine": {
         "64 - Pyrénées-Atlantiques": {
             "Iparla / Bidarray": {
-                "lat": 43.2667, "lon": -1.3500, "deco": "O", "interdit_sud": False,
+                "lat": 43.2667, "lon": -1.3500, "deco": "O", "interdit_sud": True,
                 "conseil_site": "Pays Basque, vent d'océan et brises dynamiques. Attention au vent de sud (Canigou/Foehn basque)."
             },
             "La Rhune": {
@@ -255,7 +251,6 @@ col_gauche, col_droite = st.columns([3, 2])
 with col_gauche:
     st.subheader("Configuration Pilote & Spot")
     
-    # Menus hiérarchiques : Région -> Département -> Site
     region_selectionnee = st.selectbox("Région :", list(SPOTS_HIERARCHIE.keys()))
     departements_dispos = list(SPOTS_HIERARCHIE[region_selectionnee].keys())
     dept_selectionne = st.selectbox("Département :", departements_dispos)
@@ -334,11 +329,11 @@ with col_gauche:
 
                 if spot_config["interdit_sud"] and direction in ["S", "SO", "SE"] and vitesse > 10:
                     cause_heure = f"⚠️ Danger Sud ({vitesse} km/h {direction})"
-                    facteurs_limitants.add("⚠️ Danger Vent de Sud (Risque de Foehn / Rouleaux)")
+                    facteurs_limitants.add("⚠️ Danger Vent de Sud (Sensibilité spécifique du site > 10 km/h)")
                     heure_bloquee = True
                 elif pluie > 0.1: 
                     cause_heure = f"🌧️ Pluie ({vitesse} km/h)"
-                    facteurs_limitants.add("🌧️ Présence de précipitations > 0.1 mm")
+                    facteurs_limitants.add("🌧️ Précipitations > 0.1 mm = Vol interdit")
                     heure_bloquee = True
                 elif vitesse > vent_max_autorise:
                     cause_heure = f"💨 Trop fort ({vitesse} km/h)"
@@ -372,7 +367,7 @@ with col_gauche:
                     st.markdown("**🔄 CRÉNEAUX NON VALIDÉS / HORS LIMITES :**")
                     for h_v in historique_vents[:6]:
                         st.write(h_v)
-                st.info(f"**💡 CONSEIL DU SITE ({spot_name}) :**\\n{spot_config['conseil_site']}")
+                st.info(f"**💡 CONSEIL DU SITE ({spot_name}) :**\n{spot_config['conseil_site']}")
             else:
                 st.error("🛑 FEU ROUGE : RESTE AU SOL")
                 st.write(f"**Date :** {date_selectionnee}")
@@ -417,7 +412,3 @@ with col_droite:
     • Précipitations > 0.1 mm = Vol interdit
     """
     st.markdown(regles_contenu)
-'''
-
-with open("app.py", "w", encoding="utf-8") as f:
-    f.write(app_code)
