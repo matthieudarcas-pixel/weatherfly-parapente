@@ -13,7 +13,7 @@ SPOTS_HIERARCHIE = {
             "Port de Lers": {
                 "lat": 42.8036, "lon": 1.3711, "deco": ["NO"], "interdit_sud": True,
                 "balise_ffvl_id": "2327",
-                "pioupiou_id": "327",  # ID Pioupiou / OpenWindMap associé si dispo
+                "pioupiou_id": "327",
                 "conseil_site": "⚠️ Le Port de Lers peut forcir très vite en thermique. Reste vigilant aux cycles. Sensible au vent de Sud > 10 km/h (DANGER)."
             },
             "St Girons Moulis": {
@@ -149,18 +149,55 @@ def formater_fenetres(heures_valides, data_par_heure):
     return resultats_txt
 
 @st.cache_data(ttl=300)
-def recuperer_releve_pioupiou(pioupiou_id):
-    """Interroge l'API live de Pioupiou / OpenWindMap pour récupérer le vent instantané."""
-    if not pioupiou_id:
-        return None
-    url = f"https://api.pioupiou.fr/v1/live/{pioupiou_id}"
+def recuperer_releve_pioupiou_live(pioupiou_id):
+    if not pioupiou_id: return None
     try:
+        url = f"https://api.pioupiou.fr/v1/live/{pioupiou_id}"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=8) as response:
-            res_json = json.loads(response.read().decode())
-            return res_json.get("data", {})
+        with urllib.request.urlopen(req, timeout=6) as response:
+            return json.loads(response.read().decode()).get("data", {})
     except Exception:
         return None
+
+@st.cache_data(ttl=900)
+def recuperer_archives_pioupiou_heure(pioupiou_id, date_str):
+    """Tente de récupérer et calculer une moyenne heure par heure depuis les archives Pioupiou."""
+    if not pioupiou_id: return {}
+    try:
+        dt_jour = datetime.strptime(date_str, "%Y-%m-%d")
+        start = dt_jour.strftime("%Y-%m-%dT00:00:00Z")
+        stop = dt_jour.strftime("%Y-%m-%dT23:59:59Z")
+        url = f"https://api.pioupiou.fr/v1/archive/{pioupiou_id}?start={start}&stop={stop}"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=12) as response:
+            data_arr = json.loads(response.read().decode()).get("data", [])
+            
+            # Regroupement par heure
+            bucket = {}
+            for entry in data_arr:
+                ts = entry.get("timestamp")
+                if not ts: continue
+                h = datetime.fromisoformat(ts.replace("Z", "+00:00")).hour
+                v = entry.get("wind_speed_avg")
+                r = entry.get("wind_speed_max")
+                d = entry.get("wind_direction")
+                if v is not None:
+                    if h not in bucket: bucket[h] = {"v": [], "r": [], "d": []}
+                    bucket[h]["v"].append(v)
+                    if r is not None: bucket[h]["r"].append(r)
+                    if d is not None: bucket[h]["d"].append(d)
+            
+            # Calcul des moyennes horaires
+            resultats = {}
+            for h, vals in bucket.items():
+                resultats[h] = {
+                    "vitesse": round(sum(vals["v"]) / len(vals["v"])),
+                    "rafale": round(sum(vals["r"]) / len(vals["r"])) if vals["r"] else round(sum(vals["v"]) / len(vals["v"])),
+                    "direction": round(sum(vals["d"]) / len(vals["d"])) if vals["d"] else "N/A"
+                }
+            return resultats
+    except Exception:
+        return {}
 
 def recuperer_vraie_meteo(lat, lon, date_str):
     url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&start_date={date_str}&end_date={date_str}&hourly=temperature_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,cape&wind_speed_unit=kmh&timezone=Europe%2FParis"
@@ -327,7 +364,7 @@ with col_gauche:
                 for cause in facteurs_limitants:
                     st.write(f"• {cause}")
                 if historique_vents:
-                    st.markdown("**🔄 DÉTAIL DES HEURES DU JOUR :**")
+                    st.markdown("**🔄 DÉTAIL DES HEURES DO JOUR :**")
                     for h_v in historique_vents[:6]:
                         st.write(h_v)
     else:
@@ -363,14 +400,31 @@ with col_droite:
     est_aujourdhui = (date_selectionnee == datetime.now().strftime("%Y-%m-%d"))
     if est_aujourdhui:
         st.markdown("---")
-        st.subheader("📡 Relevé Pioupiou (En direct)")
-        if spot_config.get("pioupiou_id"):
-            releve_pp = recuperer_releve_pioupiou(spot_config["pioupiou_id"])
-            if releve_pp:
-                st.write(f"• **Vent moyen** : {releve_pp.get('wind_speed_avg', 'N/A')} km/h")
-                st.write(f"• **Rafales** : {releve_pp.get('wind_speed_max', 'N/A')} km/h")
-                st.write(f"• **Direction** : {releve_pp.get('wind_direction', 'N/A')}°")
-            st.markdown(f"👉 [Consulter sur OpenWindMap](https://www.openwindmap.org/pioupiou-{spot_config.get('pioupiou_id')})")
+        st.subheader("📡 Relevé Pioupiou (Temps réel & Moyennes horaires)")
+        
+        piou_id = spot_config.get("pioupiou_id")
+        if piou_id:
+            # 1. Affichage de la dernière mesure (Live)
+            live_data = recuperer_releve_pioupiou_live(piou_id)
+            if live_data:
+                st.markdown("**Dernière mesure instantanée :**")
+                st.write(f"• Vent moyen : {live_data.get('wind_speed_avg', 'N/A')} km/h")
+                st.write(f"• Rafales : {live_data.get('wind_speed_max', 'N/A')} km/h")
+                st.write(f"• Direction : {live_data.get('wind_direction', 'N/A')}°")
+            
+            # 2. Affichage des moyennes heure par heure issues des archives de la journée
+            st.markdown("**Moyennes horaires du jour (Archives) :**")
+            with st.spinner("Chargement des archives heure par heure..."):
+                archives_dict = recuperer_archives_pioupiou_heure(piou_id, date_selectionnee)
+            
+            if archives_dict:
+                for h in sorted(archives_dict.keys()):
+                    m = archives_dict[h]
+                    st.write(f"• **{h:02d}:00** - Vent : {m['vitesse']} km/h | Rafales : {m['rafale']} km/h | Dir : {m['direction']}°")
+            else:
+                st.info("Aucune archive horaire disponible pour cette journée.")
+                
+            st.markdown(f"👉 [Consulter sur OpenWindMap](https://www.openwindmap.org/pioupiou-{piou_id})")
         elif spot_config.get("balise_ffvl_id"):
             st.markdown(f"👉 [Consulter la balise sur BaliseMétéo](https://www.balisemeteo.com/balise.php?idBalise={spot_config.get('balise_ffvl_id')})")
         else:
