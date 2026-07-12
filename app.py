@@ -349,11 +349,6 @@ with col_gauche:
     st.subheader("Verdict Météo & Aérologie")
     
     if analyser_clic:
-        est_aujourdhui = (date_selectionnee == datetime.now().strftime("%Y-%m-%d"))
-        releve_ffvl = None
-        if est_aujourdhui and spot_config.get("balise_ffvl_id"):
-            releve_ffvl = recuperer_releves_ffvl(spot_config["balise_ffvl_id"])
-
         with st.spinner("Interrogation des serveurs météo..."):
             hourly_data = recuperer_vraie_meteo(spot_config["lat"], spot_config["lon"], date_selectionnee)
         
@@ -435,9 +430,6 @@ with col_gauche:
 
             liste_fenetres = formater_fenetres(heures_valides_int, data_par_heure)
 
-            if releve_ffvl:
-                st.info(f"📡 Relevé balise FFVL en direct : {releve_ffvl.get('vent_moy', 'N/A')} km/h (actualisé sur le réseau).")
-
             if liste_fenetres:
                 st.success("🟢 FEU VERT POUR LE VOL")
                 st.write(f"**Date :** {date_selectionnee}")
@@ -490,3 +482,19 @@ with col_droite:
     • Au-delà de 5 km/h de vent, tout axe hors plage invalide l'heure
     """
     st.markdown(regles_contenu)
+    
+    # --- BLOC EN BAS À DROITE : RELEVÉS BALISE TEMPS RÉEL (SIJOUR MÊME) ---
+    est_aujourdhui = (date_selectionnee == datetime.now().strftime("%Y-%m-%d"))
+    if est_aujourdhui:
+        st.markdown("---")
+        st.subheader("📡 Relevé Balise FFVL (En direct)")
+        if spot_config.get("balise_ffvl_id"):
+            releve_actuel = recuperer_releves_ffvl(spot_config["balise_ffvl_id"])
+            if releve_actuel:
+                st.write(f"• **Vent moyen** : {releve_actuel.get('vent_moy', 'N/A')} km/h")
+                st.write(f"• **Rafales** : {releve_actuel.get('vent_raf', 'N/A')} km/h")
+                st.write(f"• **Direction** : {releve_actuel.get('vent_dir', 'N/A')}°")
+            else:
+                st.warning("Impossible de joindre les relevés en direct pour cette balise.")
+        else:
+            st.info("Aucune balise FFVL n'est encore associée à ce site dans le fichier de configuration.")
