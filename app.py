@@ -6,49 +6,50 @@ from datetime import datetime, timedelta
 # --- CONFIGURATION DE LA PAGE STREAMLIT ---
 st.set_page_config(page_title="WeatherFly - Assistant Vol Libre", layout="wide")
 
-# --- BASE DE DONNÉES PROPRE ET VÉRIFIÉE (ID DE BALISES FFVL NETTOYÉS) ---
+# --- BASE DE DONNÉES PROPRE ET VÉRIFIÉE (ID DE BALISES FFVL / PIOUPIOU) ---
 SPOTS_HIERARCHIE = {
     "Occitanie": {
         "09 - Ariège": {
             "Port de Lers": {
                 "lat": 42.8036, "lon": 1.3711, "deco": ["NO"], "interdit_sud": True,
                 "balise_ffvl_id": "2327",
+                "pioupiou_id": "327",  # ID Pioupiou / OpenWindMap associé si dispo
                 "conseil_site": "⚠️ Le Port de Lers peut forcir très vite en thermique. Reste vigilant aux cycles. Sensible au vent de Sud > 10 km/h (DANGER)."
             },
             "St Girons Moulis": {
                 "lat": 43.0709, "lon": 1.1746, "deco": ["N"], "interdit_sud": False,
-                "balise_ffvl_id": "121",
+                "balise_ffvl_id": "121", "pioupiou_id": "",
                 "conseil_site": "Brise de vallée classique. Attention au vent météo d'Ouest qui peut culer au déco."
             },
             "Prat d'Albis - Déco": {
                 "lat": 42.9217, "lon": 1.5811, "deco": ["NO", "N"], "interdit_sud": False,
-                "balise_ffvl_id": "2414",
+                "balise_ffvl_id": "2414", "pioupiou_id": "",
                 "conseil_site": "Site thermique majeur dominant Foix. Attention au sud et aux brises fortes de fin de journée."
             },
             "Col de la Core": {
                 "lat": 42.8833, "lon": 1.2167, "deco": ["O"], "interdit_sud": False,
-                "balise_ffvl_id": "175",
+                "balise_ffvl_id": "175", "pioupiou_id": "",
                 "conseil_site": "Idéal pour le soaring par brise de pente. Attention aux conditions de transition."
             }
         },
         "31 - Haute-Garonne": {
             "Arbas / Le Cornudère": {
                 "lat": 42.9667, "lon": 0.9167, "deco": ["NE"], "interdit_sud": True,
-                "balise_ffvl_id": "",
+                "balise_ffvl_id": "", "pioupiou_id": "",
                 "conseil_site": "Décollage soutenu en sous-bois, site à fort potentiel thermique. Éviter par Ouest/Nord-Ouest fort."
             }
         },
         "65 - Hautes-Pyrénées": {
             "Val Louron": {
                 "lat": 42.8167, "lon": 0.3833, "deco": ["O"], "interdit_sud": False,
-                "balise_ffvl_id": "78",
+                "balise_ffvl_id": "78", "pioupiou_id": "",
                 "conseil_site": "Site école et cross réputé, décollage immense. Attention aux brises de Lombarde ou d'Ouest."
             }
         },
         "66 - Pyrénées-Orientales": {
             "Camurac": {
                 "lat": 42.7833, "lon": 1.8833, "deco": ["E", "SE"], "interdit_sud": False,
-                "balise_ffvl_id": "5068",
+                "balise_ffvl_id": "5068", "pioupiou_id": "",
                 "conseil_site": "Analyser l'ensoleillement et les brises montantes."
             }
         }
@@ -57,21 +58,21 @@ SPOTS_HIERARCHIE = {
         "74 - Haute-Savoie": {
             "Planfait (Talloires / Annecy)": {
                 "lat": 45.8333, "lon": 6.2167, "deco": ["NO"], "interdit_sud": False,
-                "balise_ffvl_id": "",
+                "balise_ffvl_id": "", "pioupiou_id": "",
                 "conseil_site": "Site mythique d'Annecy. Attention au monde en l'air et aux brises qui s'inversent."
             }
         },
         "73 - Savoie": {
             "Bourg St Maurice": {
                 "lat": 45.6167, "lon": 6.7667, "deco": ["O"], "interdit_sud": False,
-                "balise_ffvl_id": "118",
+                "balise_ffvl_id": "118", "pioupiou_id": "",
                 "conseil_site": "Aérologie active en saison estivale."
             }
         },
         "38 - Isère": {
             "Bourg-d'Oisans": {
                 "lat": 45.0500, "lon": 6.0167, "deco": ["O", "NO"], "interdit_sud": False,
-                "balise_ffvl_id": "3347",
+                "balise_ffvl_id": "3347", "pioupiou_id": "",
                 "conseil_site": "Attention au vent de travers et aux restitutions."
             }
         }
@@ -80,7 +81,7 @@ SPOTS_HIERARCHIE = {
         "06 - Alpes-Maritimes": {
             "Breil-sur-Roya": {
                 "lat": 43.9400, "lon": 7.5100, "deco": ["S", "SO"], "interdit_sud": False,
-                "balise_ffvl_id": "3211",
+                "balise_ffvl_id": "3211", "pioupiou_id": "",
                 "conseil_site": "Site méditerranéen, attention aux brises de mer et de terre."
             }
         }
@@ -146,6 +147,20 @@ def formater_fenetres(heures_valides, data_par_heure):
         else:
             resultats_txt.append(f"• {h_debut}:00 à {h_fin+1}:00 (Vent : {fourchette_v} | Agitation : {fourchette_i})")
     return resultats_txt
+
+@st.cache_data(ttl=300)
+def recuperer_releve_pioupiou(pioupiou_id):
+    """Interroge l'API live de Pioupiou / OpenWindMap pour récupérer le vent instantané."""
+    if not pioupiou_id:
+        return None
+    url = f"https://api.pioupiou.fr/v1/live/{pioupiou_id}"
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=8) as response:
+            res_json = json.loads(response.read().decode())
+            return res_json.get("data", {})
+    except Exception:
+        return None
 
 def recuperer_vraie_meteo(lat, lon, date_str):
     url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&start_date={date_str}&end_date={date_str}&hourly=temperature_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,cape&wind_speed_unit=kmh&timezone=Europe%2FParis"
@@ -348,8 +363,15 @@ with col_droite:
     est_aujourdhui = (date_selectionnee == datetime.now().strftime("%Y-%m-%d"))
     if est_aujourdhui:
         st.markdown("---")
-        st.subheader("📡 Relevé Balise (En direct)")
-        if spot_config.get("balise_ffvl_id"):
-            st.markdown(f"👉 [Consulter la balise en direct sur BaliseMétéo](https://www.balisemeteo.com/balise.php?idBalise={spot_config.get('balise_ffvl_id')})")
+        st.subheader("📡 Relevé Pioupiou (En direct)")
+        if spot_config.get("pioupiou_id"):
+            releve_pp = recuperer_releve_pioupiou(spot_config["pioupiou_id"])
+            if releve_pp:
+                st.write(f"• **Vent moyen** : {releve_pp.get('wind_speed_avg', 'N/A')} km/h")
+                st.write(f"• **Rafales** : {releve_pp.get('wind_speed_max', 'N/A')} km/h")
+                st.write(f"• **Direction** : {releve_pp.get('wind_direction', 'N/A')}°")
+            st.markdown(f"👉 [Consulter sur OpenWindMap](https://www.openwindmap.org/pioupiou-{spot_config.get('pioupiou_id')})")
+        elif spot_config.get("balise_ffvl_id"):
+            st.markdown(f"👉 [Consulter la balise sur BaliseMétéo](https://www.balisemeteo.com/balise.php?idBalise={spot_config.get('balise_ffvl_id')})")
         else:
             st.info("Aucune balise n'est associée à ce site.")
