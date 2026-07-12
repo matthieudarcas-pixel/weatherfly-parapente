@@ -6,13 +6,13 @@ from datetime import datetime, timedelta
 # --- CONFIGURATION DE LA PAGE STREAMLIT ---
 st.set_page_config(page_title="WeatherFly - Assistant Vol Libre", layout="wide")
 
-# --- BASE DE DONNÉES STRUCTURÉE DES SITES PARAPENTE (AVEC RÈGLES SPÉCIFIQUES) ---
+# --- BASE DE DONNÉES COMPLÈTE AVEC ORIENTATIONS PRÉCISÉES ET RÈGLES SPÉCIFIQUES ---
 SPOTS_HIERARCHIE = {
     "Occitanie": {
         "09 - Ariège": {
             "Port de Lers": {
                 "lat": 42.8036, "lon": 1.3711, "deco": "NO", "interdit_sud": True,
-                "conseil_site": "⚠️ Le Port de Lers peut forcir très vite en thermique. Reste vigilant aux cycles."
+                "conseil_site": "⚠️ Le Port de Lers peut forcir très vite en thermique. Reste vigilant aux cycles. Sensible au vent de Sud > 10 km/h (DANGER)."
             },
             "Moulis / Char de Moulis": {
                 "lat": 42.9564, "lon": 1.0903, "deco": "N", "interdit_sud": False,
@@ -38,7 +38,7 @@ SPOTS_HIERARCHIE = {
             },
             "Arbas / Le Cornudère": {
                 "lat": 42.9667, "lon": 0.9167, "deco": "NE", "interdit_sud": True,
-                "conseil_site": "Décollage soutenu en sous-bois, site à fort potentiel thermique. Éviter par Ouest/Nord-Ouest fort."
+                "conseil_site": "Décollage soutenu en sous-bois, site à fort potentiel thermique. Éviter par Ouest/Nord-Ouest fort et attention au vent de Sud > 10 km/h."
             },
             "Luchon / Superbagnères": {
                 "lat": 42.7833, "lon": 0.5833, "deco": "E", "interdit_sud": False,
@@ -66,7 +66,7 @@ SPOTS_HIERARCHIE = {
             },
             "Planès": {
                 "lat": 42.4833, "lon": 2.1500, "deco": "S", "interdit_sud": True,
-                "conseil_site": "Déco typique de montagne. Bien analyser l'ensoleillement et l'heure de déclenchement."
+                "conseil_site": "Déco typique de montagne. Sensible au vent de Sud > 10 km/h (DANGER). Analyser l'ensoleillement."
             }
         }
     },
@@ -86,7 +86,7 @@ SPOTS_HIERARCHIE = {
             },
             "Chamonix / Plan de l'Aiguille": {
                 "lat": 45.9167, "lon": 6.8667, "deco": "N", "interdit_sud": True,
-                "conseil_site": "Haute montagne ! Réservé aux pilotes aguerris, attention aux vents katabatiques glaciaires."
+                "conseil_site": "Haute montagne ! Réservé aux pilotes aguerris, attention aux vents katabatiques glaciaires et aux flux de sud."
             }
         },
         "73 - Savoie": {
@@ -154,7 +154,7 @@ SPOTS_HIERARCHIE = {
         "64 - Pyrénées-Atlantiques": {
             "Iparla / Bidarray": {
                 "lat": 43.2667, "lon": -1.3500, "deco": "O", "interdit_sud": True,
-                "conseil_site": "Pays Basque, vent d'océan et brises dynamiques. Attention au vent de sud (Canigou/Foehn basque)."
+                "conseil_site": "Pays Basque, vent d'océan et brises dynamiques. Attention au vent de sud > 10 km/h (DANGER / Foehn basque)."
             },
             "La Rhune": {
                 "lat": 43.3000, "lon": -1.6333, "deco": "O", "interdit_sud": False,
@@ -367,7 +367,7 @@ with col_gauche:
                     st.markdown("**🔄 CRÉNEAUX NON VALIDÉS / HORS LIMITES :**")
                     for h_v in historique_vents[:6]:
                         st.write(h_v)
-                st.info(f"**💡 CONSEIL DU SITE ({spot_name}) :**\n{spot_config['conseil_site']}")
+                st.info(f"**💡 CONSEIL DU SITE ({spot_name} - Déco {spot_config['deco']}) :**\n{spot_config['conseil_site']}")
             else:
                 st.error("🛑 FEU ROUGE : RESTE AU SOL")
                 st.write(f"**Date :** {date_selectionnee}")
@@ -404,7 +404,7 @@ with col_droite:
     • Si Oreilles non maîtrisées et Indice ≥ 8 : Blocage pic thermique
 
     **TOLÉRANCE D'ORIENTATION**
-    • Axe du vent toléré jusqu'à 45° max du déco
+    • Axe du vent toléré jusqu'à 45° max de l'orientation du déco
     • Au-delà de 5 km/h de vent, tout axe hors plage invalide l'heure
 
     **RÈGLES PARTICULIÈRES SITES**
