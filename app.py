@@ -243,19 +243,6 @@ def recuperer_vraie_meteo(lat, lon, date_str):
         st.error(f"Erreur d'accès direct à l'API météo : {e}")
         return {}
 
-# --- GESTION DES CALLBACKS POUR LES SELECTBOX EN CASCADE ---
-def reset_dept():
-    # Quand la région change, on efface le département et le site mémorisés pour forcer la mise à jour
-    keys_to_clear = ["dept_sel", "spot_sel"]
-    for k in keys_to_clear:
-        if k in st.session_state:
-            del st.session_state[k]
-
-def reset_spot():
-    # Quand le département change, on réinitialise le site
-    if "spot_sel" in st.session_state:
-        del st.session_state["spot_sel"]
-
 # --- INTERFACE UTILISATEUR (STREAMLIT) ---
 st.title("WeatherFly - Assistant Vol Libre")
 
@@ -264,15 +251,35 @@ col_gauche, col_droite = st.columns([3, 2])
 with col_gauche:
     st.subheader("Configuration Pilote & Spot")
     
-    region_selectionnee = st.selectbox("Région :", list(SPOTS_HIERARCHIE.keys()), key="region_sel", on_change=reset_dept)
+    # Gestion manuelle et sécurisée de la hiérarchie dans session_state pour éviter les blocages d'index
+    regions = list(SPOTS_HIERARCHIE.keys())
+    if "region" not in st.session_state or st.session_state["region"] not in regions:
+        st.session_state["region"] = regions[0]
     
-    departements_dispos = list(SPOTS_HIERARCHIE[region_selectionnee].keys())
-    dept_selectionne = st.selectbox("Département :", departements_dispos, key="dept_sel", on_change=reset_spot)
+    region_selectionnee = st.selectbox("Région :", regions, index=regions.index(st.session_state["region"]))
+    if region_selectionnee != st.session_state["region"]:
+        st.session_state["region"] = region_selectionnee
+        st.rerun()
+
+    departements = list(SPOTS_HIERARCHIE[st.session_state["region"]].keys())
+    if "dept" not in st.session_state or st.session_state["dept"] not in departements:
+        st.session_state["dept"] = departements[0]
+        
+    dept_selectionne = st.selectbox("Département :", departements, index=departements.index(st.session_state["dept"]))
+    if dept_selectionne != st.session_state["dept"]:
+        st.session_state["dept"] = dept_selectionne
+        st.rerun()
+
+    sites = list(SPOTS_HIERARCHIE[st.session_state["region"]][st.session_state["dept"]].keys())
+    if "spot" not in st.session_state or st.session_state["spot"] not in sites:
+        st.session_state["spot"] = sites[0]
+        
+    spot_name = st.selectbox("Site officiel :", sites, index=sites.index(st.session_state["spot"]))
+    if spot_name != st.session_state["spot"]:
+        st.session_state["spot"] = spot_name
+        st.rerun()
     
-    sites_dispos = list(SPOTS_HIERARCHIE[region_selectionnee][dept_selectionne].keys())
-    spot_name = st.selectbox("Site officiel :", sites_dispos, key="spot_sel")
-    
-    spot_config = SPOTS_HIERARCHIE[region_selectionnee][dept_selectionne][spot_name]
+    spot_config = SPOTS_HIERARCHIE[st.session_state["region"]][st.session_state["dept"]][st.session_state["spot"]]
     
     dates_possibles = [(datetime.now() + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(15)]
     date_selectionnee = st.selectbox("Date du vol :", dates_possibles, key="date_sel")
