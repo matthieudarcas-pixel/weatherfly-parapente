@@ -149,7 +149,6 @@ def formater_fenetres(heures_valides, data_par_heure):
 
 @st.cache_data(ttl=600)
 def charger_toutes_les_balises():
-    """Charge et met en cache le fichier global pour éviter les latences répétées."""
     url_releves = "https://data.ffvl.fr/json/relevesmeteo.json"
     try:
         req = urllib.request.Request(url_releves, headers={'User-Agent': 'Mozilla/5.0'})
@@ -162,18 +161,16 @@ def recuperer_releves_ffvl(balise_id):
     if not balise_id:
         return None
     data = charger_toutes_les_balises()
-    str_id = str(balise_id)
-    if str_id in data:
-        return data[str_id]
+    str_id = str(balise_id).strip()
     for k, v in data.items():
-        if str_id.lower() in str(k).lower():
+        if str_id == str(k) or f"ffvl-{str_id}" == str(k) or str_id in str(k):
             return v
     return None
 
 def recuperer_vraie_meteo(lat, lon, date_str):
     url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&start_date={date_str}&end_date={date_str}&hourly=temperature_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,cape&wind_speed_unit=kmh&timezone=Europe%2FParis"
     try:
-        req_om = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/20'})
+        req_om = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req_om, timeout=20) as response:
             data = json.loads(response.read().decode())
             return data.get("hourly", {})
@@ -379,6 +376,8 @@ with col_droite:
                 st.write(f"• **Rafales** : {releve_actuel.get('vent_raf', 'N/A')} km/h")
                 st.write(f"• **Direction** : {releve_actuel.get('vent_dir', 'N/A')}°")
             else:
-                st.warning("Impossible de joindre les relevés en direct pour cette balise.")
+                st.warning(f"Données directes non disponibles dans le flux pour la balise ID {spot_config.get('balise_ffvl_id')}.")
+                st.markdown(f"👉 [Consulter la balise en direct sur BaliseMétéo](https://www.balisemeteo.com/balise.php?idBalise={spot_config.get('balise_ffvl_id')})")
         else:
             st.info("Aucune balise n'est associée à ce site.")
+        
