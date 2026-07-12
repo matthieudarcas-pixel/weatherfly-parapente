@@ -289,7 +289,15 @@ def recuperer_vraie_meteo(lat, lon, date_str):
     url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&start_date={date_str}&end_date={date_str}&hourly=temperature_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,cape&wind_speed_unit=kmh&timezone=Europe%2FParis"
     try:
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=20) as response:
+        with urllib.request.urlopen(url, timeout=20) as response: # fix context url/req if needed
+            # wait, let's keep the exact original functional implementation for open-meteo request
+            pass
+    except Exception:
+        pass
+    # Re-writing cleanly the open-meteo request part to avoid any typo:
+    try:
+        req_om = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req_om, timeout=20) as response:
             data = json.loads(response.read().decode())
             return data.get("hourly", {})
     except Exception as e:
@@ -498,8 +506,3 @@ with col_droite:
                 st.warning("Impossible de joindre les relevés en direct pour cette balise.")
         else:
             st.info("Aucune balise FFVL n'est associée à ce site.")
-
----
-Ce guide d'utilisation des outils météo de la fédération présente des informations complémentaires pour la pratique. [Guide d'utilisation de Spotair FFVL](https://www.youtube.com/watch?v=G1foN11EhH4)
-
-Ce tutoriel vidéo permet de comprendre comment s'articulent les balises météo et les outils d'aide à la décision du vol libre au sein de l'écosystème FFVL.
