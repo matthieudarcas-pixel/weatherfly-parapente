@@ -156,12 +156,11 @@ def recuperer_releve_pioupiou_live(pioupiou_id):
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req, timeout=6) as response:
             return json.loads(response.read().decode()).get("data", {})
-    except Exception:
+    except Exception as e:
         return None
 
 @st.cache_data(ttl=900)
 def recuperer_archives_pioupiou_heure(pioupiou_id, date_str):
-    """Tente de récupérer et calculer une moyenne heure par heure depuis les archives Pioupiou."""
     if not pioupiou_id: return {}
     try:
         dt_jour = datetime.strptime(date_str, "%Y-%m-%d")
@@ -171,8 +170,8 @@ def recuperer_archives_pioupiou_heure(pioupiou_id, date_str):
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req, timeout=12) as response:
             data_arr = json.loads(response.read().decode()).get("data", [])
+            if not data_arr: return {}
             
-            # Regroupement par heure
             bucket = {}
             for entry in data_arr:
                 ts = entry.get("timestamp")
@@ -187,7 +186,6 @@ def recuperer_archives_pioupiou_heure(pioupiou_id, date_str):
                     if r is not None: bucket[h]["r"].append(r)
                     if d is not None: bucket[h]["d"].append(d)
             
-            # Calcul des moyennes horaires
             resultats = {}
             for h, vals in bucket.items():
                 resultats[h] = {
@@ -217,11 +215,9 @@ col_gauche, col_droite = st.columns([3, 2])
 
 with col_gauche:
     st.subheader("Configuration Pilote & Spot")
-    
     regions = list(SPOTS_HIERARCHIE.keys())
     if "region" not in st.session_state or st.session_state["region"] not in regions:
         st.session_state["region"] = regions[0]
-    
     region_selectionnee = st.selectbox("Région :", regions, index=regions.index(st.session_state["region"]))
     if region_selectionnee != st.session_state["region"]:
         st.session_state["region"] = region_selectionnee
@@ -230,7 +226,6 @@ with col_gauche:
     departements = list(SPOTS_HIERARCHIE[st.session_state["region"]].keys())
     if "dept" not in st.session_state or st.session_state["dept"] not in departements:
         st.session_state["dept"] = departements[0]
-        
     dept_selectionne = st.selectbox("Département :", departements, index=departements.index(st.session_state["dept"]))
     if dept_selectionne != st.session_state["dept"]:
         st.session_state["dept"] = dept_selectionne
@@ -239,7 +234,6 @@ with col_gauche:
     sites = list(SPOTS_HIERARCHIE[st.session_state["region"]][st.session_state["dept"]].keys())
     if "spot" not in st.session_state or st.session_state["spot"] not in sites:
         st.session_state["spot"] = sites[0]
-        
     spot_name = st.selectbox("Site officiel :", sites, index=sites.index(st.session_state["spot"]))
     if spot_name != st.session_state["spot"]:
         st.session_state["spot"] = spot_name
@@ -249,45 +243,30 @@ with col_gauche:
     
     dates_possibles = [(datetime.now() + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(15)]
     date_selectionnee = st.selectbox("Date du vol :", dates_possibles, key="date_sel")
-    
     ploufs = st.number_input("Expérience (Nb de ploufs) :", min_value=0, max_value=1000, value=15, key="ploufs_sel")
     
     col_chk1, col_chk2 = st.columns(2)
-    with col_chk1:
-        m_oreilles = st.checkbox("Oreilles", key="oreilles_chk")
-    with col_chk2:
-        m_face = st.checkbox("Face voile (>15km/h)", key="face_chk")
+    with col_chk1: m_oreilles = st.checkbox("Oreilles", key="oreilles_chk")
+    with col_chk2: m_face = st.checkbox("Face voile (>15km/h)", key="face_chk")
         
     analyser_clic = st.button("RECHERCHER ET ANALYSER", type="primary", key="btn_analyser")
-
     st.subheader("Verdict Météo & Aérologie")
     
     if analyser_clic:
         with st.spinner("Interrogation des serveurs météo..."):
             hourly_data = recuperer_vraie_meteo(spot_config["lat"], spot_config["lon"], date_selectionnee)
-        
         if hourly_data and "time" in hourly_data:
             heures_valides_int = []
             data_par_heure = {}  
             facteurs_limitants = set()
             historique_vents = []
-            
             vent_max_autorise = 15 if ploufs < 20 else (20 if ploufs <= 40 else 26)
-            
-            if ploufs < 20:
-                profil = "Débutant"
-                seuil_agitation_max = 6
-            elif ploufs <= 40:
-                profil = "Progression"
-                seuil_agitation_max = 8
-            else:
-                profil = "Confirmé"
-                seuil_agitation_max = 10
+            seuil_agitation_max = 6 if ploufs < 20 else (8 if ploufs <= 40 else 10)
+            profil = "Débutant" if ploufs < 20 else ("Progression" if ploufs <= 40 else "Confirmé")
 
             for i in range(len(hourly_data["time"])):
                 heure_texte = hourly_data["time"][i].split("T")[1][:5]
                 heure_int = int(heure_texte.split(":")[0])
-                
                 if heure_int < 8 or heure_int > 21: continue
                     
                 vitesse = round(hourly_data["wind_speed_10m"][i])
@@ -301,10 +280,9 @@ with col_gauche:
 
                 heure_bloquee = False
                 cause_heure = ""
-
                 if indice_agitation > seuil_agitation_max:
-                    cause_heure = f"☀️ Agitation thermique (Indice {indice_agitation}/10 > max {seuil_agitation_max} for {profil})"
-                    facteurs_limitants.add(f"☀️ Aérologie trop agitée (Indice {indice_agitation}/10 non adapté au niveau {profil})")
+                    cause_heure = f"☀️ Agitation thermique (Indice {indice_agitation}/10 > max {seuil_agitation_max})"
+                    facteurs_limitants.add(f"☀️ Aérologie trop agitée (Indice {indice_agitation}/10)")
                     heure_bloquee = True
                 elif not m_oreilles and indice_agitation >= 8:
                     cause_heure = f"🔥 Thermique marqué sans oreilles (Indice {indice_agitation}/10)"
@@ -317,23 +295,23 @@ with col_gauche:
 
                 if spot_config["interdit_sud"] and direction in ["S", "SO", "SE"] and vitesse > 10:
                     cause_heure = f"⚠️ Danger Sud ({vitesse} km/h {direction})"
-                    facteurs_limitants.add("⚠️ Danger Vent de Sud (Sensibilité spécifique du site > 10 km/h)")
+                    facteurs_limitants.add("⚠️ Danger Vent de Sud")
                     heure_bloquee = True
                 elif pluie > 0.1: 
-                    cause_heure = f"🌧️ Pluie ({vitesse} km/h)"
-                    facteurs_limitants.add("🌧️ Précipitations > 0.1 mm = Vol interdit")
+                    cause_heure = f"🌧️ Pluie"
+                    facteurs_limitants.add("🌧️ Précipitations > 0.1 mm")
                     heure_bloquee = True
                 elif vitesse > vent_max_autorise:
                     cause_heure = f"💨 Trop fort ({vitesse} km/h)"
-                    facteurs_limitants.add(f"💨 Vent trop fort pour niveau {profil} (>{vent_max_autorise}km/h)")
+                    facteurs_limitants.add(f"💨 Vent trop fort (>{vent_max_autorise}km/h)")
                     heure_bloquee = True
                 elif vitesse > 15 and not m_face:
-                    cause_heure = f"🛑 Face voile requis ({vitesse} km/h)"
-                    facteurs_limitants.add("🛑 Face voile requis mais non coché (Vent > 15km/h)")
+                    cause_heure = f"🛑 Face voile requis"
+                    facteurs_limitants.add("🛑 Face voile requis")
                     heure_bloquee = True
                 elif vitesse > 5 and not valider_axe_vent(direction, spot_config["deco"]):
-                    cause_heure = f"🧭 Vent de travers/cul ({vitesse} km/h {direction})"
-                    facteurs_limitants.add(f"🧭 Vent arrière ou travers (Déco orienté {', '.join(spot_config['deco'])})")
+                    cause_heure = f"🧭 Vent de travers"
+                    facteurs_limitants.add("🧭 Vent arrière ou travers")
                     heure_bloquee = True
 
                 if heure_bloquee:
@@ -343,89 +321,44 @@ with col_gauche:
                     data_par_heure[heure_int] = {"vitesse": vitesse, "indice": indice_agitation}
 
             liste_fenetres = formater_fenetres(heures_valides_int, data_par_heure)
-
             if liste_fenetres:
                 st.success("🟢 FEU VERT POUR LE VOL")
-                st.write(f"**Date :** {date_selectionnee}")
-                st.write(f"**Profil :** {profil} ({ploufs} ploufs) - Seuil agitation max : {seuil_agitation_max}/10")
-                st.markdown("**✅ FENÊTRE(S) DE VOL COMPATIBLE(S) :**")
-                for f in liste_fenetres:
-                    st.write(f)
-                if historique_vents:
-                    st.markdown("**🔄 CRÉNEAUX NON VALIDÉS / HORS LIMITES :**")
-                    for h_v in historique_vents[:6]:
-                        st.write(h_v)
-                st.info(f"**💡 CONSEIL DU SITE ({spot_name} - Déco {', '.join(spot_config['deco'])}) :**\n{spot_config['conseil_site']}")
+                for f in liste_fenetres: st.write(f)
             else:
                 st.error("🛑 FEU ROUGE : RESTE AU SOL")
-                st.write(f"**Date :** {date_selectionnee}")
-                st.write(f"**Profil :** {profil} (Seuil agitation max : {seuil_agitation_max}/10)")
-                st.markdown("**❌ FACTEURS BLOQUANTS CONSTATÉS :**")
-                for cause in facteurs_limitants:
-                    st.write(f"• {cause}")
-                if historique_vents:
-                    st.markdown("**🔄 DÉTAIL DES HEURES DO JOUR :**")
-                    for h_v in historique_vents[:6]:
-                        st.write(h_v)
+                for cause in facteurs_limitants: st.write(f"• {cause}")
     else:
-        st.info("Sélectionne ton spot dans les menus et clique sur 'RECHERCHER ET ANALYSER'.")
+        st.info("Sélectionne ton spot et clique sur 'RECHERCHER ET ANALYSER'.")
 
 with col_droite:
     st.subheader("Guide des Règles Intégrées")
-    regles_contenu = """
-    **LIMITES DE VENT (MÉTÉO)**
-    • <20 ploufs (Débutant) : Max 15 km/h
-    • 20 à 40 ploufs (Progression) : Max 20 km/h
-    • >40 ploufs (Confirmé) : Max 26 km/h
-
-    **ACTIVITÉ THERMIQUE (AGITATION)**
-    • Débutant (<20 ploufs) :
-      ❌ Agitation max autorisée : 6/10
-    • Progression (20 à 40 ploufs) :
-      ❌ Agitation max autorisée : 8/10
-      ❌ Indice ≥8 interdit SAUF si oreilles cochées
-    • Confirmé (>40 ploufs) :
-      ✔️ Aucune restriction d'indice
-
-    **TECHNIQUE ET PILOTAGE**
-    • Si Vent > 15 km/h : Gonflage face voile obligatoire
-    • Si Oreilles non maîtrisées et Indice ≥ 8 : Blocage pic thermique
-
-    **TOLÉRANCE D'ORIENTATION**
-    • Axe du vent toléré jusqu'à 45° max de l'orientation du déco
-    • Au-delà de 5 km/h de vent, tout axe hors plage invalide l'heure
-    """
-    st.markdown(regles_contenu)
+    st.markdown("**LIMITES DE VENT & RÈGLES**...")
     
     est_aujourdhui = (date_selectionnee == datetime.now().strftime("%Y-%m-%d"))
     if est_aujourdhui:
         st.markdown("---")
-        st.subheader("📡 Relevé Pioupiou (Temps réel & Moyennes horaires)")
+        st.subheader("📡 Relevé Pioupiou (Temps réel & Moyennes)")
         
         piou_id = spot_config.get("pioupiou_id")
         if piou_id:
-            # 1. Affichage de la dernière mesure (Live)
             live_data = recuperer_releve_pioupiou_live(piou_id)
-            if live_data:
+            if live_data and live_data.get('wind_speed_avg') is not None:
                 st.markdown("**Dernière mesure instantanée :**")
-                st.write(f"• Vent moyen : {live_data.get('wind_speed_avg', 'N/A')} km/h")
+                st.write(f"• Vent moyen : {live_data.get('wind_speed_avg')} km/h")
                 st.write(f"• Rafales : {live_data.get('wind_speed_max', 'N/A')} km/h")
                 st.write(f"• Direction : {live_data.get('wind_direction', 'N/A')}°")
+            else:
+                st.warning("Mesure instantanée indisponible.")
             
-            # 2. Affichage des moyennes heure par heure issues des archives de la journée
-            st.markdown("**Moyennes horaires du jour (Archives) :**")
-            with st.spinner("Chargement des archives heure par heure..."):
-                archives_dict = recuperer_archives_pioupiou_heure(piou_id, date_selectionnee)
-            
+            archives_dict = recuperer_archives_pioupiou_heure(piou_id, date_selectionnee)
             if archives_dict:
+                st.markdown("**Moyennes horaires du jour :**")
                 for h in sorted(archives_dict.keys()):
                     m = archives_dict[h]
-                    st.write(f"• **{h:02d}:00** - Vent : {m['vitesse']} km/h | Rafales : {m['rafale']} km/h | Dir : {m['direction']}°")
+                    st.write(f"• **{h:02d}:00** - Vent : {m['vitesse']} km/h | Rafales : {m['rafale']} km/h")
             else:
-                st.info("Aucune archive horaire disponible pour cette journée.")
+                st.info("Aucune archive horaire disponible pour l'instant.")
                 
             st.markdown(f"👉 [Consulter sur OpenWindMap](https://www.openwindmap.org/pioupiou-{piou_id})")
-        elif spot_config.get("balise_ffvl_id"):
-            st.markdown(f"👉 [Consulter la balise sur BaliseMétéo](https://www.balisemeteo.com/balise.php?idBalise={spot_config.get('balise_ffvl_id')})")
         else:
-            st.info("Aucune balise n'est associée à ce site.")
+            st.info("Aucun identifiant Pioupiou configuré pour ce site.")
