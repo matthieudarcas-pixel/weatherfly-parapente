@@ -303,13 +303,12 @@ with col_gauche:
             
             if prev_18_vitesse is not None and indice_base_18 is not None:
                 diff_moy = ((mesure_ffvl_moy - prev_18_vitesse) / prev_18_vitesse) * 100
-                diff_max = ((mesure_ffvl_max - prev_18_vitesse) / prev_18_vitesse) * 100
                 diff_agitation_pct = ((indice_agitation_balise - indice_base_18) / indice_base_18) * 100 if indice_base_18 > 0 else 0
                 diff_agitation_abs = indice_agitation_balise - indice_base_18
                 
                 st.write(f"• Prévision météo à 18:00 (Vent : {round(prev_18_vitesse, 1)} km/h | Agitation de base : {indice_base_18}/10)")
                 st.write(f"• Vent moyen BaliseMétéo (18:23) : {mesure_ffvl_moy} km/h (Écart : {round(diff_moy, 1)}%)")
-                st.write(f"• Vent maxi / Rafale BaliseMétéo (18:23) : {mesure_ffvl_max} km/h (Écart : {round(diff_max, 1)}%)")
+                st.write(f"• Vent maxi / Rafale BaliseMétéo (18:23) : {mesure_ffvl_max} km/h")
                 st.write(f"• **Indice d'agitation calculé (Balise) :** {indice_agitation_balise}/10")
                 st.write(f"• **Différence d'agitation :** {diff_agitation_abs:+d} point(s) ({round(diff_agitation_pct)}% d'écart)")
             else:
@@ -326,6 +325,8 @@ with col_droite:
     - **Pilote Confirmé (> 40 ploufs) :** Vent max 26 km/h, tolérance agitation max 10/10.
     - **Orientation du vent :** Doit correspondre à l'axe du décollage (±45°).
     - **Vent de Sud :** Interdit ou limité à 10 km/h sur les sites sensibles (ex: Port de Lers).
+    - **Oreilles :** Obligatoires ou recommandées si l'indice d'agitation thermique est élevé (entre 8 et 10/10 sans maîtrise des oreilles = blocage).
+    - **Face voile :** Requis dès que le vent dépasse 15 km/h au décollage pour garantir la sécurité et le contrôle de l'aile.
     """)
     
     ffvl_id = spot_config.get("balise_ffvl_id")
@@ -340,5 +341,11 @@ with col_droite:
         st.write("• **Vent maxi :** 28 km/h (SSE : 157°)")
         st.write("• **Vitesse minimum :** 15 km/h")
         st.write("• **Température :** NC")
+        
+        st.markdown("---")
+        st.subheader("📊 Comparaison Prévision vs BaliseMétéo (18:23)")
+        st.write("• **Indice d'agitation de base (18:00) :** 5/10")
+        st.write("• **Indice d'agitation Balise (18:23) :** 8/10")
+        st.write("• **Différence d'agitation :** +3 point(s)")
     else:
         st.info("Aucun identifiant BaliseMétéo FFVL configuré pour ce site.")
