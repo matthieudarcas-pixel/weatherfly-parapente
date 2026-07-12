@@ -208,6 +208,20 @@ with col_gauche:
             historique_vents = []
             vent_max_autorise = 15 if ploufs < 20 else (20 if ploufs <= 40 else 26)
             seuil_agitation_max = 6 if ploufs < 20 else (8 if ploufs <= 40 else 10)
+            
+            # Recherche de l'indice de base à 18:00
+            indice_base_18 = None
+            prev_18_vitesse = None
+            for i in range(len(hourly_data["time"])):
+                h_txt = hourly_data["time"][i].split("T")[1][:5]
+                if h_txt.startswith("18"):
+                    v = round(hourly_data["wind_speed_10m"][i])
+                    r = round(hourly_data["wind_gusts_10m"][i]) if "wind_gusts_10m" in hourly_data else v
+                    c = hourly_data.get("cape", [0])[i] if "cape" in hourly_data else 0
+                    prev_18_vitesse = v
+                    delta = max(0, r - v)
+                    indice_base_18 = min(10, round((delta / 3) + (v / 5) + (c / 200)))
+                    break
 
             for i in range(len(hourly_data["time"])):
                 heure_texte = hourly_data["time"][i].split("T")[1][:5]
@@ -273,33 +287,34 @@ with col_gauche:
                 st.error("🛑 FEU ROUGE : RESTE AU SOL")
                 for cause in facteurs_limitants: st.write(f"• {cause}")
                 
-            # Détail complet du verdict / historique
             if historique_vents:
                 st.markdown("**Détail horaire de l'analyse :**")
                 for h_hist in historique_vents:
                     st.write(h_hist)
                 
-            # --- COMPARAISON AVEC LA MESURE INSTANTANÉE BALISEMÉTÉO (18:23) ---
+            # --- COMPARAISON & CALCUL D'AGITATION AVEC VALEURS BALISE (18:23) ---
             st.markdown("---")
             st.subheader("📊 Comparaison Prévision vs BaliseMétéo (18:23)")
             
-            prev_18_vitesse = None
-            for i in range(len(hourly_data["time"])):
-                h_txt = hourly_data["time"][i].split("T")[1][:5]
-                if h_txt.startswith("18"):
-                    prev_18_vitesse = hourly_data["wind_speed_10m"][i]
-                    break
-            
             mesure_ffvl_moy = 23.0
             mesure_ffvl_max = 28.0
+            # Delta rafale mesuré sur balise = 28 - 23 = 5
+            delta_balise = max(0, mesure_ffvl_max - mesure_ffvl_moy)
+            # On conserve le même terme CAPE estimé ou 0 pour l'instantané si non fourni
+            cape_estime = 0 
+            indice_agitation_balise = min(10, round((delta_balise / 3) + (mesure_ffvl_moy / 5) + (cape_estime / 200)))
             
-            if prev_18_vitesse is not None:
+            if prev_18_vitesse is not None and indice_base_18 is not None:
                 diff_moy = ((mesure_ffvl_moy - prev_18_vitesse) / prev_18_vitesse) * 100
                 diff_max = ((mesure_ffvl_max - prev_18_vitesse) / prev_18_vitesse) * 100
+                diff_agitation_pct = ((indice_agitation_balise - indice_base_18) / indice_base_18) * 100 if indice_base_18 > 0 else 0
+                diff_agitation_abs = indice_agitation_balise - indice_base_18
                 
-                st.write(f"• Prévision météo à 18:00 : {round(prev_18_vitesse, 1)} km/h")
+                st.write(f"• Prévision météo à 18:00 (Vent : {round(prev_18_vitesse, 1)} km/h | Agitation de base : {indice_base_18}/10)")
                 st.write(f"• Vent moyen BaliseMétéo (18:23) : {mesure_ffvl_moy} km/h (Écart : {round(diff_moy, 1)}%)")
                 st.write(f"• Vent maxi / Rafale BaliseMétéo (18:23) : {mesure_ffvl_max} km/h (Écart : {round(diff_max, 1)}%)")
+                st.write(f"• **Indice d'agitation calculé (Balise) :** {indice_agitation_balise}/10")
+                st.write(f"• **Différence d'agitation :** {diff_agitation_abs:+d} point(s) ({round(diff_agitation_pct)}% d'écart)")
             else:
                 st.info("Pas de prévision horaire exacte disponible pour 18:00.")
     else:
@@ -315,7 +330,6 @@ with col_droite:
         st.subheader("📡 Lien BaliseMétéo FFVL")
         st.markdown(f"👉 [Consulter la balise {ffvl_id} sur BaliseMétéo](https://www.balisemeteo.com/balise.php?idBalise={ffvl_id})")
         
-        # Partie droite mise sous le lien
         st.markdown("---")
         st.subheader("Relevé BaliseMétéo (Instantané)")
         st.write("• **Vent moyen (18:23) :** 23 km/h (SSE : 157°)")
