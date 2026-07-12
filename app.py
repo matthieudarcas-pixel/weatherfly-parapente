@@ -1,7 +1,6 @@
 import streamlit as st
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util import Retry
+import urllib.request
+import json
 from datetime import datetime, timedelta
 
 # --- CONFIGURATION DE LA PAGE STREAMLIT ---
@@ -88,17 +87,13 @@ def formater_fenetres(heures_valides, data_par_heure):
 
 def recuperer_vraie_meteo(lat, lon, date_str):
     url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&start_date={date_str}&end_date={date_str}&hourly=temperature_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,cape&wind_speed_unit=kmh&timezone=Europe%2FParis"
-    
-    # Configuration d'une session avec auto-retry en cas d'instabilité réseau
-    session = requests.Session()
-    retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
-    session.mount('https://', HTTPAdapter(max_retries=retries))
-    
     try:
-        resp = session.get(url, timeout=15)
-        return resp.json().get("hourly", {})
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=20) as response:
+            data = json.loads(response.read().decode())
+            return data.get("hourly", {})
     except Exception as e:
-        st.error(f"Impossible de joindre l'API météo après plusieurs essais : {e}")
+        st.error(f"Erreur d'accès direct à l'API météo : {e}")
         return {}
 
 # --- INTERFACE UTILISATEUR (STREAMLIT) ---
