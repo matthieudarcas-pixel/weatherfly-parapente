@@ -243,6 +243,19 @@ def recuperer_vraie_meteo(lat, lon, date_str):
         st.error(f"Erreur d'accès direct à l'API météo : {e}")
         return {}
 
+# --- GESTION DES CALLBACKS POUR LES SELECTBOX EN CASCADE ---
+def reset_dept():
+    # Quand la région change, on efface le département et le site mémorisés pour forcer la mise à jour
+    keys_to_clear = ["dept_sel", "spot_sel"]
+    for k in keys_to_clear:
+        if k in st.session_state:
+            del st.session_state[k]
+
+def reset_spot():
+    # Quand le département change, on réinitialise le site
+    if "spot_sel" in st.session_state:
+        del st.session_state["spot_sel"]
+
 # --- INTERFACE UTILISATEUR (STREAMLIT) ---
 st.title("WeatherFly - Assistant Vol Libre")
 
@@ -251,10 +264,11 @@ col_gauche, col_droite = st.columns([3, 2])
 with col_gauche:
     st.subheader("Configuration Pilote & Spot")
     
-    # Utilisation de clés uniques (key) pour forcer le rafraîchissement d'état lors des sélections
-    region_selectionnee = st.selectbox("Région :", list(SPOTS_HIERARCHIE.keys()), key="region_sel")
+    region_selectionnee = st.selectbox("Région :", list(SPOTS_HIERARCHIE.keys()), key="region_sel", on_change=reset_dept)
+    
     departements_dispos = list(SPOTS_HIERARCHIE[region_selectionnee].keys())
-    dept_selectionne = st.selectbox("Département :", departements_dispos, key="dept_sel")
+    dept_selectionne = st.selectbox("Département :", departements_dispos, key="dept_sel", on_change=reset_spot)
+    
     sites_dispos = list(SPOTS_HIERARCHIE[region_selectionnee][dept_selectionne].keys())
     spot_name = st.selectbox("Site officiel :", sites_dispos, key="spot_sel")
     
