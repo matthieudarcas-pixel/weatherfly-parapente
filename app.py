@@ -251,26 +251,27 @@ col_gauche, col_droite = st.columns([3, 2])
 with col_gauche:
     st.subheader("Configuration Pilote & Spot")
     
-    region_selectionnee = st.selectbox("Région :", list(SPOTS_HIERARCHIE.keys()))
+    # Utilisation de clés uniques (key) pour forcer le rafraîchissement d'état lors des sélections
+    region_selectionnee = st.selectbox("Région :", list(SPOTS_HIERARCHIE.keys()), key="region_sel")
     departements_dispos = list(SPOTS_HIERARCHIE[region_selectionnee].keys())
-    dept_selectionne = st.selectbox("Département :", departements_dispos)
+    dept_selectionne = st.selectbox("Département :", departements_dispos, key="dept_sel")
     sites_dispos = list(SPOTS_HIERARCHIE[region_selectionnee][dept_selectionne].keys())
-    spot_name = st.selectbox("Site officiel :", sites_dispos)
+    spot_name = st.selectbox("Site officiel :", sites_dispos, key="spot_sel")
     
     spot_config = SPOTS_HIERARCHIE[region_selectionnee][dept_selectionne][spot_name]
     
     dates_possibles = [(datetime.now() + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(15)]
-    date_selectionnee = st.selectbox("Date du vol :", dates_possibles)
+    date_selectionnee = st.selectbox("Date du vol :", dates_possibles, key="date_sel")
     
-    ploufs = st.number_input("Expérience (Nb de ploufs) :", min_value=0, max_value=1000, value=15)
+    ploufs = st.number_input("Expérience (Nb de ploufs) :", min_value=0, max_value=1000, value=15, key="ploufs_sel")
     
     col_chk1, col_chk2 = st.columns(2)
     with col_chk1:
-        m_oreilles = st.checkbox("Oreilles")
+        m_oreilles = st.checkbox("Oreilles", key="oreilles_chk")
     with col_chk2:
-        m_face = st.checkbox("Face voile (>15km/h)")
+        m_face = st.checkbox("Face voile (>15km/h)", key="face_chk")
         
-    analyser_clic = st.button("RECHERCHER ET ANALYSER", type="primary")
+    analyser_clic = st.button("RECHERCHER ET ANALYSER", type="primary", key="btn_analyser")
 
     st.subheader("Verdict Météo & Aérologie")
     
