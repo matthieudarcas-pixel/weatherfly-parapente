@@ -12,73 +12,73 @@ SPOTS_HIERARCHIE = {
         "09 - Ariège": {
             "Port de Lers": {
                 "lat": 42.8036, "lon": 1.3711, "deco": ["NO"], "interdit_sud": True,
-                "balise_ffvl_id": "131",
+                "balise_ffvl_id": "portdelers",
                 "conseil_site": "⚠️ Le Port de Lers peut forcir très vite en thermique. Reste vigilant aux cycles. Sensible au vent de Sud > 10 km/h (DANGER)."
             },
             "Moulis / Char de Moulis": {
                 "lat": 42.9564, "lon": 1.0903, "deco": ["N"], "interdit_sud": False,
-                "balise_ffvl_id": "132",
+                "balise_ffvl_id": "moulis",
                 "conseil_site": "Brise de vallée classique. Attention au vent météo d'Ouest qui peut culer au déco."
             },
             "Prat d'Albis": {
                 "lat": 42.9333, "lon": 1.5833, "deco": ["NO"], "interdit_sud": False,
-                "balise_ffvl_id": "31",
+                "balise_ffvl_id": "pratdalbis",
                 "conseil_site": "Site thermique majeur dominant Foix. Attention au sud et aux brises fortes de fin de journée."
             },
             "Col de la Core": {
                 "lat": 42.8833, "lon": 1.2167, "deco": ["O"], "interdit_sud": False,
-                "balise_ffvl_id": "133",
+                "balise_ffvl_id": "coldelacore",
                 "conseil_site": "Idéal pour le soaring par brise de pente de Bethmale. Attention aux murets à l'atterrissage."
             },
             "Cazavet": {
                 "lat": 43.0167, "lon": 1.0333, "deco": ["NE"], "interdit_sud": False,
-                "balise_ffvl_id": "134",
+                "balise_ffvl_id": "cazavet",
                 "conseil_site": "Décollage falaise bien alimenté par brise montante de Nord-Est. Poser dans la plaine si ça force."
             }
         },
         "31 - Haute-Garonne": {
             "Gensac-sur-Garonne": {
                 "lat": 43.2107, "lon": 1.1312, "deco": ["NO"], "interdit_sud": False,
-                "balise_ffvl_id": "135",
+                "balise_ffvl_id": "gensac",
                 "conseil_site": "Thermo-dynamique de secteur NNO/ONO. Vent d'Ouest strict = turbulences et rouleaux."
             },
             "Arbas / Le Cornudère": {
                 "lat": 42.9667, "lon": 0.9167, "deco": ["NE"], "interdit_sud": True,
-                "balise_ffvl_id": "22",
+                "balise_ffvl_id": "arbas",
                 "conseil_site": "Décollage soutenu en sous-bois, site à fort potentiel thermique. Éviter par Ouest/Nord-Ouest fort et attention au vent de Sud > 10 km/h."
             },
             "Luchon / Superbagnères": {
                 "lat": 42.7833, "lon": 0.5833, "deco": ["E"], "interdit_sud": False,
-                "balise_ffvl_id": "45",
+                "balise_ffvl_id": "luchon",
                 "conseil_site": "Vol en vallée haut-garonnaise. Attention aux thermiques puissants et aux restitutions le soir."
             }
         },
         "65 - Hautes-Pyrénées": {
             "Agos-Vidalos / Pic du Jer (Lourdes)": {
                 "lat": 43.0833, "lon": -0.0500, "deco": ["NO"], "interdit_sud": False,
-                "balise_ffvl_id": "62",
+                "balise_ffvl_id": "lourdes",
                 "conseil_site": "Site incontournable des vallées des Gaves. Bien surveiller la brise de vallée."
             },
             "Col d'Aspin": {
                 "lat": 42.9167, "lon": 0.3333, "deco": ["E"], "interdit_sud": False,
-                "balise_ffvl_id": "63",
+                "balise_ffvl_id": "aspin",
                 "conseil_site": "Magnifique vol rando/alpi. Attention au vent de face/travers selon l'versant choisi."
             },
             "Val Louron": {
                 "lat": 42.8167, "lon": 0.3833, "deco": ["O"], "interdit_sud": False,
-                "balise_ffvl_id": "78",
+                "balise_ffvl_id": "vallouron",
                 "conseil_site": "Site école et cross réputé, décollage immense. Attention aux brises de Lombarde ou d'Ouest."
             }
         },
         "66 - Pyrénées-Orientales": {
             "Eyne / Cerdagne": {
                 "lat": 42.4833, "lon": 2.1167, "deco": ["E"], "interdit_sud": False,
-                "balise_ffvl_id": "80",
+                "balise_ffvl_id": "eyne",
                 "conseil_site": "Vallée cérdane ventée, attention aux thermiques catabatiques et aux brises d'est."
             },
             "Planès": {
                 "lat": 42.4833, "lon": 2.1500, "deco": ["S"], "interdit_sud": True,
-                "balise_ffvl_id": "81",
+                "balise_ffvl_id": "planes",
                 "conseil_site": "Déco typique de montagne. Sensible au vent de Sud > 10 km/h (DANGER). Analyser l'ensoleillement."
             }
         }
@@ -87,46 +87,46 @@ SPOTS_HIERARCHIE = {
         "74 - Haute-Savoie": {
             "Planfait (Talloires / Annecy)": {
                 "lat": 45.8333, "lon": 6.2167, "deco": ["NO"], "interdit_sud": False,
-                "balise_ffvl_id": "90",
+                "balise_ffvl_id": "planfait",
                 "conseil_site": "Site mythique d'Annecy. Attention au monde en l'air et aux brises qui s'inversent."
             },
             "Le Doussard (Annecy Sud)": {
                 "lat": 45.7667, "lon": 6.2833, "deco": ["O"], "interdit_sud": False,
-                "balise_ffvl_id": "91",
+                "balise_ffvl_id": "doussard",
                 "conseil_site": "Atterrissage et décos du bout du lac. Attention aux thermiques forts l'après-midi."
             },
             "Semnoz": {
                 "lat": 45.7833, "lon": 6.1333, "deco": ["O"], "interdit_sud": False,
-                "balise_ffvl_id": "92",
+                "balise_ffvl_id": "semnoz",
                 "conseil_site": "Alpage magnifique, belles conditions de restitution le soir."
             },
             "Chamonix / Plan de l'Aiguille": {
                 "lat": 45.9167, "lon": 6.8667, "deco": ["N"], "interdit_sud": True,
-                "balise_ffvl_id": "95",
+                "balise_ffvl_id": "chamonix",
                 "conseil_site": "Haute montagne ! Réservé aux pilotes aguerris, attention aux vents katabatiques glaciaires et aux flux de sud."
             }
         },
         "73 - Savoie": {
             "Col de la Forclaz (Savoie)": {
                 "lat": 45.6833, "lon": 6.2833, "deco": ["O"], "interdit_sud": False,
-                "balise_ffvl_id": "100",
+                "balise_ffvl_id": "forclaz",
                 "conseil_site": "Décollage exceptionnel, aérologie active en saison estivale."
             },
             "Montlambert": {
                 "lat": 45.5500, "lon": 6.2333, "deco": ["O"], "interdit_sud": False,
-                "balise_ffvl_id": "101",
+                "balise_ffvl_id": "montlambert",
                 "conseil_site": "Combe de Savoie : attention aux brises de vallée puissantes et au 'Transversal'."
             }
         },
         "38 - Isère": {
             "Saint-Hilaire du Touvet (Crest-Charlais)": {
                 "lat": 45.3167, "lon": 5.8833, "deco": ["O"], "interdit_sud": False,
-                "balise_ffvl_id": "115",
+                "balise_ffvl_id": "sainthilaire",
                 "conseil_site": "La Mecque du vol libre français (Coupe Icare). Attention au vent de travers et aux restitutions."
             },
             "Moucherotte / Vercors": {
                 "lat": 45.1833, "lon": 5.6667, "deco": ["E"], "interdit_sud": False,
-                "balise_ffvl_id": "116",
+                "balise_ffvl_id": "moucherotte",
                 "conseil_site": "Falaises majestueuses du Vercors. Attention au vent d'Ouest basculant."
             }
         }
@@ -135,31 +135,31 @@ SPOTS_HIERARCHIE = {
         "05 - Hautes-Alpes": {
             "Chabenet / Orcières": {
                 "lat": 44.6833, "lon": 6.3333, "deco": ["NO"], "interdit_sud": False,
-                "balise_ffvl_id": "140",
+                "balise_ffvl_id": "orcieres",
                 "conseil_site": "Vol de montagne alpin, brises thermiques marquées l'été."
             },
             "Serre Ponçon / Saint-Vincent": {
                 "lat": 44.4833, "lon": 6.3833, "deco": ["SO"], "interdit_sud": False,
-                "balise_ffvl_id": "141",
+                "balise_ffvl_id": "saintvincent",
                 "conseil_site": "Aérologie de lac, brise thermique locale puissante s'établissant l'après-midi."
             }
         },
         "06 - Alpes-Maritimes": {
             "Gourdon": {
                 "lat": 43.7167, "lon": 6.9833, "deco": ["S"], "interdit_sud": False,
-                "balise_ffvl_id": "150",
+                "balise_ffvl_id": "gourdon",
                 "conseil_site": "Superbe falaise surplombant le Loup. Attention aux brises de mer et de terre."
             },
             "Col de Bleine": {
                 "lat": 43.8333, "lon": 6.8167, "deco": ["O"], "interdit_sud": False,
-                "balise_ffvl_id": "151",
+                "balise_ffvl_id": "bleine",
                 "conseil_site": "Grand site de distance, attention aux forçages thermiques."
             }
         },
         "83 - Var": {
             "Le Beausset / Mont Caume": {
                 "lat": 43.2000, "lon": 5.8000, "deco": ["S"], "interdit_sud": False,
-                "balise_ffvl_id": "160",
+                "balise_ffvl_id": "beausset",
                 "conseil_site": "Site méditerranéen, attention au vent d'Est/Sud-Est parfois turbulent."
             }
         }
@@ -168,12 +168,12 @@ SPOTS_HIERARCHIE = {
         "68 - Haut-Rhin": {
             "Le Treh (Markstein)": {
                 "lat": 47.9167, "lon": 7.0333, "deco": ["O"], "interdit_sud": False,
-                "balise_ffvl_id": "170",
+                "balise_ffvl_id": "treh",
                 "conseil_site": "Haut lieu du vol libre vosgien. Attention au vent d'Est (travers/sous-le-vent)."
             },
             "Grand Ballon": {
                 "lat": 47.9000, "lon": 7.1000, "deco": ["E"], "interdit_sud": False,
-                "balise_ffvl_id": "171",
+                "balise_ffvl_id": "grandballon",
                 "conseil_site": "Sommet des Vosges, attention aux brises de plaine d'Alsace."
             }
         }
@@ -182,19 +182,19 @@ SPOTS_HIERARCHIE = {
         "64 - Pyrénées-Atlantiques": {
             "Iparla / Bidarray": {
                 "lat": 43.2667, "lon": -1.3500, "deco": ["O"], "interdit_sud": True,
-                "balise_ffvl_id": "180",
+                "balise_ffvl_id": "bidarray",
                 "conseil_site": "Pays Basque, vent d'océan et brises dynamiques. Attention au vent de sud > 10 km/h (DANGER / Foehn basque)."
             },
             "La Rhune": {
                 "lat": 43.3000, "lon": -1.6333, "deco": ["O"], "interdit_sud": False,
-                "balise_ffvl_id": "181",
+                "balise_ffvl_id": "larhune",
                 "conseil_site": "Proche de la mer, brises de mer prononcées."
             }
         },
         "33 - Gironde": {
             "Dune du Pilat": {
                 "lat": 44.5900, "lon": -1.2140, "deco": ["O"], "interdit_sud": False,
-                "balise_ffvl_id": "190",
+                "balise_ffvl_id": "pilat",
                 "conseil_site": "Soaring pur sur la plus haute dune d'Europe. Respecter la cohabitation et la règle de priorité à droite."
             }
         }
@@ -203,7 +203,7 @@ SPOTS_HIERARCHIE = {
         "29 - Finistère": {
             "Ménez Hom": {
                 "lat": 48.2167, "lon": -4.1000, "deco": ["O", "N"], "interdit_sud": False,
-                "balise_ffvl_id": "195",
+                "balise_ffvl_id": "menezhom",
                 "conseil_site": "Colline emblématique bretonne, vol dynamique par vent d'ouest ou nord."
             }
         }
@@ -271,7 +271,7 @@ def formater_fenetres(heures_valides, data_par_heure):
     return resultats_txt
 
 def recuperer_releves_ffvl(balise_id):
-    """Interroge les flux JSON officiels de la FFVL pour le temps réel."""
+    """Interroge les flux JSON officiels de la FFVL pour le temps réel avec recherche flexible."""
     if not balise_id:
         return None
     url_releves = "https://data.ffvl.fr/json/relevesmeteo.json"
@@ -279,22 +279,18 @@ def recuperer_releves_ffvl(balise_id):
         req = urllib.request.Request(url_releves, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req, timeout=10) as response:
             data = json.loads(response.read().decode())
+            # Recherche exacte ou partielle de la balise dans les clés du dictionnaire distant
             if balise_id in data:
                 return data[balise_id]
+            for key, val in data.items():
+                if balise_id.lower() in key.lower() or key.lower() in balise_id.lower():
+                    return val
     except Exception:
         pass
     return None
 
 def recuperer_vraie_meteo(lat, lon, date_str):
     url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&start_date={date_str}&end_date={date_str}&hourly=temperature_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,cape&wind_speed_unit=kmh&timezone=Europe%2FParis"
-    try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(url, timeout=20) as response: # fix context url/req if needed
-            # wait, let's keep the exact original functional implementation for open-meteo request
-            pass
-    except Exception:
-        pass
-    # Re-writing cleanly the open-meteo request part to avoid any typo:
     try:
         req_om = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req_om, timeout=20) as response:
