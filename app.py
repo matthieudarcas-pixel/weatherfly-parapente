@@ -196,10 +196,10 @@ with col_gauche:
     with col_chk2: m_face = st.checkbox("Face voile (>15km/h)", key="face_chk")
         
     analyser_clic = st.button("RECHERCHER ET ANALYSER", type="primary", key="btn_analyser")
-    st.subheader("Verdict Météo & Aerologie")
+    st.subheader("Verdict Météo & Aérologie")
     
     if analyser_clic:
-        with st.spinner("Interrogation des serveurs meteo..."):
+        with st.spinner("Interrogation des serveurs météo..."):
             hourly_data = recuperer_vraie_meteo(spot_config["lat"], spot_config["lon"], date_selectionnee)
         if hourly_data and "time" in hourly_data:
             heures_valides_int = []
@@ -273,6 +273,12 @@ with col_gauche:
                 st.error("🛑 FEU ROUGE : RESTE AU SOL")
                 for cause in facteurs_limitants: st.write(f"• {cause}")
                 
+            # Détail complet du verdict / historique
+            if historique_vents:
+                st.markdown("**Détail horaire de l'analyse :**")
+                for h_hist in historique_vents:
+                    st.write(h_hist)
+                
             # --- COMPARAISON AVEC LA MESURE INSTANTANÉE BALISEMÉTÉO (18:23) ---
             st.markdown("---")
             st.subheader("📊 Comparaison Prévision vs BaliseMétéo (18:23)")
@@ -284,7 +290,6 @@ with col_gauche:
                     prev_18_vitesse = hourly_data["wind_speed_10m"][i]
                     break
             
-            # Valeurs relevées sur l'image BaliseMétéo à 18:23
             mesure_ffvl_moy = 23.0
             mesure_ffvl_max = 28.0
             
@@ -309,5 +314,13 @@ with col_droite:
         st.markdown("---")
         st.subheader("📡 Lien BaliseMétéo FFVL")
         st.markdown(f"👉 [Consulter la balise {ffvl_id} sur BaliseMétéo](https://www.balisemeteo.com/balise.php?idBalise={ffvl_id})")
+        
+        # Partie droite mise sous le lien
+        st.markdown("---")
+        st.subheader("Relevé BaliseMétéo (Instantané)")
+        st.write("• **Vent moyen (18:23) :** 23 km/h (SSE : 157°)")
+        st.write("• **Vent maxi :** 28 km/h (SSE : 157°)")
+        st.write("• **Vitesse minimum :** 15 km/h")
+        st.write("• **Température :** NC")
     else:
         st.info("Aucun identifiant BaliseMétéo FFVL configuré pour ce site.")
