@@ -6,50 +6,49 @@ from datetime import datetime, timedelta
 # --- CONFIGURATION DE LA PAGE STREAMLIT ---
 st.set_page_config(page_title="WeatherFly - Assistant Vol Libre", layout="wide")
 
-# --- BASE DE DONNÉES PROPRE ET VÉRIFIÉE (ID DE BALISES FFVL / PIOUPIOU) ---
+# --- BASE DE DONNÉES PROPRE ET VÉRIFIÉE (ID DE BALISES FFVL NETTOYÉS) ---
 SPOTS_HIERARCHIE = {
     "Occitanie": {
         "09 - Ariège": {
             "Port de Lers": {
                 "lat": 42.8036, "lon": 1.3711, "deco": ["NO"], "interdit_sud": True,
                 "balise_ffvl_id": "2327",
-                "pioupiou_id": "327",
                 "conseil_site": "⚠️ Le Port de Lers peut forcir très vite en thermique. Reste vigilant aux cycles. Sensible au vent de Sud > 10 km/h (DANGER)."
             },
             "St Girons Moulis": {
                 "lat": 43.0709, "lon": 1.1746, "deco": ["N"], "interdit_sud": False,
-                "balise_ffvl_id": "121", "pioupiou_id": "",
+                "balise_ffvl_id": "121",
                 "conseil_site": "Brise de vallée classique. Attention au vent météo d'Ouest qui peut culer au déco."
             },
             "Prat d'Albis - Déco": {
                 "lat": 42.9217, "lon": 1.5811, "deco": ["NO", "N"], "interdit_sud": False,
-                "balise_ffvl_id": "2414", "pioupiou_id": "",
+                "balise_ffvl_id": "2414",
                 "conseil_site": "Site thermique majeur dominant Foix. Attention au sud et aux brises fortes de fin de journée."
             },
             "Col de la Core": {
                 "lat": 42.8833, "lon": 1.2167, "deco": ["O"], "interdit_sud": False,
-                "balise_ffvl_id": "175", "pioupiou_id": "",
+                "balise_ffvl_id": "175",
                 "conseil_site": "Idéal pour le soaring par brise de pente. Attention aux conditions de transition."
             }
         },
         "31 - Haute-Garonne": {
             "Arbas / Le Cornudère": {
                 "lat": 42.9667, "lon": 0.9167, "deco": ["NE"], "interdit_sud": True,
-                "balise_ffvl_id": "", "pioupiou_id": "",
+                "balise_ffvl_id": "",
                 "conseil_site": "Décollage soutenu en sous-bois, site à fort potentiel thermique. Éviter par Ouest/Nord-Ouest fort."
             }
         },
         "65 - Hautes-Pyrénées": {
             "Val Louron": {
                 "lat": 42.8167, "lon": 0.3833, "deco": ["O"], "interdit_sud": False,
-                "balise_ffvl_id": "78", "pioupiou_id": "",
+                "balise_ffvl_id": "78",
                 "conseil_site": "Site école et cross réputé, décollage immense. Attention aux brises de Lombarde ou d'Ouest."
             }
         },
         "66 - Pyrénées-Orientales": {
             "Camurac": {
                 "lat": 42.7833, "lon": 1.8833, "deco": ["E", "SE"], "interdit_sud": False,
-                "balise_ffvl_id": "5068", "pioupiou_id": "",
+                "balise_ffvl_id": "5068",
                 "conseil_site": "Analyser l'ensoleillement et les brises montantes."
             }
         }
@@ -58,21 +57,21 @@ SPOTS_HIERARCHIE = {
         "74 - Haute-Savoie": {
             "Planfait (Talloires / Annecy)": {
                 "lat": 45.8333, "lon": 6.2167, "deco": ["NO"], "interdit_sud": False,
-                "balise_ffvl_id": "", "pioupiou_id": "",
+                "balise_ffvl_id": "",
                 "conseil_site": "Site mythique d'Annecy. Attention au monde en l'air et aux brises qui s'inversent."
             }
         },
         "73 - Savoie": {
             "Bourg St Maurice": {
                 "lat": 45.6167, "lon": 6.7667, "deco": ["O"], "interdit_sud": False,
-                "balise_ffvl_id": "118", "pioupiou_id": "",
+                "balise_ffvl_id": "118",
                 "conseil_site": "Aérologie active en saison estivale."
             }
         },
         "38 - Isère": {
             "Bourg-d'Oisans": {
                 "lat": 45.0500, "lon": 6.0167, "deco": ["O", "NO"], "interdit_sud": False,
-                "balise_ffvl_id": "3347", "pioupiou_id": "",
+                "balise_ffvl_id": "3347",
                 "conseil_site": "Attention au vent de travers et aux restitutions."
             }
         }
@@ -81,7 +80,7 @@ SPOTS_HIERARCHIE = {
         "06 - Alpes-Maritimes": {
             "Breil-sur-Roya": {
                 "lat": 43.9400, "lon": 7.5100, "deco": ["S", "SO"], "interdit_sud": False,
-                "balise_ffvl_id": "3211", "pioupiou_id": "",
+                "balise_ffvl_id": "3211",
                 "conseil_site": "Site méditerranéen, attention aux brises de mer et de terre."
             }
         }
@@ -148,55 +147,6 @@ def formater_fenetres(heures_valides, data_par_heure):
             resultats_txt.append(f"• {h_debut}:00 à {h_fin+1}:00 (Vent : {fourchette_v} | Agitation : {fourchette_i})")
     return resultats_txt
 
-@st.cache_data(ttl=300)
-def recuperer_releve_pioupiou_live(pioupiou_id):
-    if not pioupiou_id: return None
-    try:
-        url = f"https://api.pioupiou.fr/v1/live/{pioupiou_id}"
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=6) as response:
-            return json.loads(response.read().decode()).get("data", {})
-    except Exception as e:
-        return None
-
-@st.cache_data(ttl=900)
-def recuperer_archives_pioupiou_heure(pioupiou_id, date_str):
-    if not pioupiou_id: return {}
-    try:
-        dt_jour = datetime.strptime(date_str, "%Y-%m-%d")
-        start = dt_jour.strftime("%Y-%m-%dT00:00:00Z")
-        stop = dt_jour.strftime("%Y-%m-%dT23:59:59Z")
-        url = f"https://api.pioupiou.fr/v1/archive/{pioupiou_id}?start={start}&stop={stop}"
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=12) as response:
-            data_arr = json.loads(response.read().decode()).get("data", [])
-            if not data_arr: return {}
-            
-            bucket = {}
-            for entry in data_arr:
-                ts = entry.get("timestamp")
-                if not ts: continue
-                h = datetime.fromisoformat(ts.replace("Z", "+00:00")).hour
-                v = entry.get("wind_speed_avg")
-                r = entry.get("wind_speed_max")
-                d = entry.get("wind_direction")
-                if v is not None:
-                    if h not in bucket: bucket[h] = {"v": [], "r": [], "d": []}
-                    bucket[h]["v"].append(v)
-                    if r is not None: bucket[h]["r"].append(r)
-                    if d is not None: bucket[h]["d"].append(d)
-            
-            resultats = {}
-            for h, vals in bucket.items():
-                resultats[h] = {
-                    "vitesse": round(sum(vals["v"]) / len(vals["v"])),
-                    "rafale": round(sum(vals["r"]) / len(vals["r"])) if vals["r"] else round(sum(vals["v"]) / len(vals["v"])),
-                    "direction": round(sum(vals["d"]) / len(vals["d"])) if vals["d"] else "N/A"
-                }
-            return resultats
-    except Exception:
-        return {}
-
 def recuperer_vraie_meteo(lat, lon, date_str):
     url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&start_date={date_str}&end_date={date_str}&hourly=temperature_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation,cape&wind_speed_unit=kmh&timezone=Europe%2FParis"
     try:
@@ -215,9 +165,11 @@ col_gauche, col_droite = st.columns([3, 2])
 
 with col_gauche:
     st.subheader("Configuration Pilote & Spot")
+    
     regions = list(SPOTS_HIERARCHIE.keys())
     if "region" not in st.session_state or st.session_state["region"] not in regions:
         st.session_state["region"] = regions[0]
+    
     region_selectionnee = st.selectbox("Région :", regions, index=regions.index(st.session_state["region"]))
     if region_selectionnee != st.session_state["region"]:
         st.session_state["region"] = region_selectionnee
@@ -226,6 +178,7 @@ with col_gauche:
     departements = list(SPOTS_HIERARCHIE[st.session_state["region"]].keys())
     if "dept" not in st.session_state or st.session_state["dept"] not in departements:
         st.session_state["dept"] = departements[0]
+        
     dept_selectionne = st.selectbox("Département :", departements, index=departements.index(st.session_state["dept"]))
     if dept_selectionne != st.session_state["dept"]:
         st.session_state["dept"] = dept_selectionne
@@ -234,6 +187,7 @@ with col_gauche:
     sites = list(SPOTS_HIERARCHIE[st.session_state["region"]][st.session_state["dept"]].keys())
     if "spot" not in st.session_state or st.session_state["spot"] not in sites:
         st.session_state["spot"] = sites[0]
+        
     spot_name = st.selectbox("Site officiel :", sites, index=sites.index(st.session_state["spot"]))
     if spot_name != st.session_state["spot"]:
         st.session_state["spot"] = spot_name
@@ -243,30 +197,45 @@ with col_gauche:
     
     dates_possibles = [(datetime.now() + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(15)]
     date_selectionnee = st.selectbox("Date du vol :", dates_possibles, key="date_sel")
+    
     ploufs = st.number_input("Expérience (Nb de ploufs) :", min_value=0, max_value=1000, value=15, key="ploufs_sel")
     
     col_chk1, col_chk2 = st.columns(2)
-    with col_chk1: m_oreilles = st.checkbox("Oreilles", key="oreilles_chk")
-    with col_chk2: m_face = st.checkbox("Face voile (>15km/h)", key="face_chk")
+    with col_chk1:
+        m_oreilles = st.checkbox("Oreilles", key="oreilles_chk")
+    with col_chk2:
+        m_face = st.checkbox("Face voile (>15km/h)", key="face_chk")
         
     analyser_clic = st.button("RECHERCHER ET ANALYSER", type="primary", key="btn_analyser")
+
     st.subheader("Verdict Météo & Aérologie")
     
     if analyser_clic:
         with st.spinner("Interrogation des serveurs météo..."):
             hourly_data = recuperer_vraie_meteo(spot_config["lat"], spot_config["lon"], date_selectionnee)
+        
         if hourly_data and "time" in hourly_data:
             heures_valides_int = []
             data_par_heure = {}  
             facteurs_limitants = set()
             historique_vents = []
+            
             vent_max_autorise = 15 if ploufs < 20 else (20 if ploufs <= 40 else 26)
-            seuil_agitation_max = 6 if ploufs < 20 else (8 if ploufs <= 40 else 10)
-            profil = "Débutant" if ploufs < 20 else ("Progression" if ploufs <= 40 else "Confirmé")
+            
+            if ploufs < 20:
+                profil = "Débutant"
+                seuil_agitation_max = 6
+            elif ploufs <= 40:
+                profil = "Progression"
+                seuil_agitation_max = 8
+            else:
+                profil = "Confirmé"
+                seuil_agitation_max = 10
 
             for i in range(len(hourly_data["time"])):
                 heure_texte = hourly_data["time"][i].split("T")[1][:5]
                 heure_int = int(heure_texte.split(":")[0])
+                
                 if heure_int < 8 or heure_int > 21: continue
                     
                 vitesse = round(hourly_data["wind_speed_10m"][i])
@@ -280,9 +249,10 @@ with col_gauche:
 
                 heure_bloquee = False
                 cause_heure = ""
+
                 if indice_agitation > seuil_agitation_max:
-                    cause_heure = f"☀️ Agitation thermique (Indice {indice_agitation}/10 > max {seuil_agitation_max})"
-                    facteurs_limitants.add(f"☀️ Aérologie trop agitée (Indice {indice_agitation}/10)")
+                    cause_heure = f"☀️ Agitation thermique (Indice {indice_agitation}/10 > max {seuil_agitation_max} for {profil})"
+                    facteurs_limitants.add(f"☀️ Aérologie trop agitée (Indice {indice_agitation}/10 non adapté au niveau {profil})")
                     heure_bloquee = True
                 elif not m_oreilles and indice_agitation >= 8:
                     cause_heure = f"🔥 Thermique marqué sans oreilles (Indice {indice_agitation}/10)"
@@ -295,23 +265,23 @@ with col_gauche:
 
                 if spot_config["interdit_sud"] and direction in ["S", "SO", "SE"] and vitesse > 10:
                     cause_heure = f"⚠️ Danger Sud ({vitesse} km/h {direction})"
-                    facteurs_limitants.add("⚠️ Danger Vent de Sud")
+                    facteurs_limitants.add("⚠️ Danger Vent de Sud (Sensibilité spécifique du site > 10 km/h)")
                     heure_bloquee = True
                 elif pluie > 0.1: 
-                    cause_heure = f"🌧️ Pluie"
-                    facteurs_limitants.add("🌧️ Précipitations > 0.1 mm")
+                    cause_heure = f"🌧️ Pluie ({vitesse} km/h)"
+                    facteurs_limitants.add("🌧️ Précipitations > 0.1 mm = Vol interdit")
                     heure_bloquee = True
                 elif vitesse > vent_max_autorise:
                     cause_heure = f"💨 Trop fort ({vitesse} km/h)"
-                    facteurs_limitants.add(f"💨 Vent trop fort (>{vent_max_autorise}km/h)")
+                    facteurs_limitants.add(f"💨 Vent trop fort pour niveau {profil} (>{vent_max_autorise}km/h)")
                     heure_bloquee = True
                 elif vitesse > 15 and not m_face:
-                    cause_heure = f"🛑 Face voile requis"
-                    facteurs_limitants.add("🛑 Face voile requis")
+                    cause_heure = f"🛑 Face voile requis ({vitesse} km/h)"
+                    facteurs_limitants.add("🛑 Face voile requis mais non coché (Vent > 15km/h)")
                     heure_bloquee = True
                 elif vitesse > 5 and not valider_axe_vent(direction, spot_config["deco"]):
-                    cause_heure = f"🧭 Vent de travers"
-                    facteurs_limitants.add("🧭 Vent arrière ou travers")
+                    cause_heure = f"🧭 Vent de travers/cul ({vitesse} km/h {direction})"
+                    facteurs_limitants.add(f"🧭 Vent arrière ou travers (Déco orienté {', '.join(spot_config['deco'])})")
                     heure_bloquee = True
 
                 if heure_bloquee:
@@ -321,44 +291,65 @@ with col_gauche:
                     data_par_heure[heure_int] = {"vitesse": vitesse, "indice": indice_agitation}
 
             liste_fenetres = formater_fenetres(heures_valides_int, data_par_heure)
+
             if liste_fenetres:
                 st.success("🟢 FEU VERT POUR LE VOL")
-                for f in liste_fenetres: st.write(f)
+                st.write(f"**Date :** {date_selectionnee}")
+                st.write(f"**Profil :** {profil} ({ploufs} ploufs) - Seuil agitation max : {seuil_agitation_max}/10")
+                st.markdown("**✅ FENÊTRE(S) DE VOL COMPATIBLE(S) :**")
+                for f in liste_fenetres:
+                    st.write(f)
+                if historique_vents:
+                    st.markdown("**🔄 CRÉNEAUX NON VALIDÉS / HORS LIMITES :**")
+                    for h_v in historique_vents[:6]:
+                        st.write(h_v)
+                st.info(f"**💡 CONSEIL DU SITE ({spot_name} - Déco {', '.join(spot_config['deco'])}) :**\n{spot_config['conseil_site']}")
             else:
                 st.error("🛑 FEU ROUGE : RESTE AU SOL")
-                for cause in facteurs_limitants: st.write(f"• {cause}")
+                st.write(f"**Date :** {date_selectionnee}")
+                st.write(f"**Profil :** {profil} (Seuil agitation max : {seuil_agitation_max}/10)")
+                st.markdown("**❌ FACTEURS BLOQUANTS CONSTATÉS :**")
+                for cause in facteurs_limitants:
+                    st.write(f"• {cause}")
+                if historique_vents:
+                    st.markdown("**🔄 DÉTAIL DES HEURES DU JOUR :**")
+                    for h_v in historique_vents[:6]:
+                        st.write(h_v)
     else:
-        st.info("Sélectionne ton spot et clique sur 'RECHERCHER ET ANALYSER'.")
+        st.info("Sélectionne ton spot dans les menus et clique sur 'RECHERCHER ET ANALYSER'.")
 
 with col_droite:
     st.subheader("Guide des Règles Intégrées")
-    st.markdown("**LIMITES DE VENT & RÈGLES**...")
+    regles_contenu = """
+    **LIMITES DE VENT (MÉTÉO)**
+    • <20 ploufs (Débutant) : Max 15 km/h
+    • 20 à 40 ploufs (Progression) : Max 20 km/h
+    • >40 ploufs (Confirmé) : Max 26 km/h
+
+    **ACTIVITÉ THERMIQUE (AGITATION)**
+    • Débutant (<20 ploufs) :
+      ❌ Agitation max autorisée : 6/10
+    • Progression (20 à 40 ploufs) :
+      ❌ Agitation max autorisée : 8/10
+      ❌ Indice ≥8 interdit SAUF si oreilles cochées
+    • Confirmé (>40 ploufs) :
+      ✔️ Aucune restriction d'indice
+
+    **TECHNIQUE ET PILOTAGE**
+    • Si Vent > 15 km/h : Gonflage face voile obligatoire
+    • Si Oreilles non maîtrisées et Indice ≥ 8 : Blocage pic thermique
+
+    **TOLÉRANCE D'ORIENTATION**
+    • Axe du vent toléré jusqu'à 45° max de l'orientation du déco
+    • Au-delà de 5 km/h de vent, tout axe hors plage invalide l'heure
+    """
+    st.markdown(regles_contenu)
     
     est_aujourdhui = (date_selectionnee == datetime.now().strftime("%Y-%m-%d"))
     if est_aujourdhui:
         st.markdown("---")
-        st.subheader("📡 Relevé Pioupiou (Temps réel & Moyennes)")
-        
-        piou_id = spot_config.get("pioupiou_id")
-        if piou_id:
-            live_data = recuperer_releve_pioupiou_live(piou_id)
-            if live_data and live_data.get('wind_speed_avg') is not None:
-                st.markdown("**Dernière mesure instantanée :**")
-                st.write(f"• Vent moyen : {live_data.get('wind_speed_avg')} km/h")
-                st.write(f"• Rafales : {live_data.get('wind_speed_max', 'N/A')} km/h")
-                st.write(f"• Direction : {live_data.get('wind_direction', 'N/A')}°")
-            else:
-                st.warning("Mesure instantanée indisponible.")
-            
-            archives_dict = recuperer_archives_pioupiou_heure(piou_id, date_selectionnee)
-            if archives_dict:
-                st.markdown("**Moyennes horaires du jour :**")
-                for h in sorted(archives_dict.keys()):
-                    m = archives_dict[h]
-                    st.write(f"• **{h:02d}:00** - Vent : {m['vitesse']} km/h | Rafales : {m['rafale']} km/h")
-            else:
-                st.info("Aucune archive horaire disponible pour l'instant.")
-                
-            st.markdown(f"👉 [Consulter sur OpenWindMap](https://www.openwindmap.org/pioupiou-{piou_id})")
+        st.subheader("📡 Relevé Balise (En direct)")
+        if spot_config.get("balise_ffvl_id"):
+            st.markdown(f"👉 [Consulter la balise en direct sur BaliseMétéo](https://www.balisemeteo.com/balise.php?idBalise={spot_config.get('balise_ffvl_id')})")
         else:
-            st.info("Aucun identifiant Pioupiou configuré pour ce site.")
+            st.info("Aucune balise n'est associée à ce site.")
