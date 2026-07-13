@@ -108,7 +108,7 @@ def recuperer_vraie_meteo(lat, lon, date_str):
     except Exception:
         return {}
 
-# --- 4. FONCTION DE RECHERCHE BALISE REELLE MODIFIÉE ---
+# --- 4. FONCTION DE RECHERCHE BALISE REELLE ---
 def recuperer_donnees_balise_reelles(balise_id):
     url = f"https://www.balisemeteo.com/balise.php?idBalise={balise_id}"
     fallback = {
@@ -120,7 +120,7 @@ def recuperer_donnees_balise_reelles(balise_id):
         with urllib.request.urlopen(req, timeout=4) as response:
             html_raw = response.read().decode('utf-8')
             
-            # 1. On nettoie tout le HTML pour travailler sur du texte brut standardisé
+            # Nettoyage du HTML pour travailler sur du texte brut standardisé
             text_clean = re.sub(r'<[^>]*>', ' ', html_raw)
             text_clean = re.sub(r'\s+', ' ', text_clean)
             
@@ -294,6 +294,9 @@ with col_droite:
         st.markdown("---")
         st.subheader("📡 Relevé Réel BaliseMétéo")
         
+        # [MODIF 1] Restauration du lien direct vers la balise sans rien supprimer
+        st.markdown(f"[Accéder à la page de la balise FFVL n°{ffvl_id}](https://www.balisemeteo.com/balise.php?idBalise={ffvl_id})")
+        
         if st.button("🔄 Rafraîchir la balise", key="refresh_balise"):
             st.session_state.refresh_counter += 1
         
@@ -305,10 +308,12 @@ with col_droite:
         st.write(f"• **Indice d'agitation réel :** {balise_reelle['indice']}/10")
         
         if 'hourly_data' in locals() and hourly_data:
-            diff_pourcent = round(((balise_reelle['indice'] - indice_preve_actuel) / indice_preve_actuel) * 100)
-            if diff_pourcent > 0:
-                st.warning(f"📈 **Comparaison :** Les conditions réelles sur site sont **{diff_pourcent}% plus agitées** que les prévisions météo initiales.")
-            elif diff_pourcent < 0:
-                st.info(f"📉 **Comparaison :** Les conditions réelles sur site sont **{abs(diff_pourcent)}% plus calmes** que les prévisions météo initiales.")
+            # [MODIF 2] Calcul de l'écart brut en points d'indice à la place du pourcentage
+            diff_indice = balise_reelle['indice'] - indice_preve_actuel
+            
+            if diff_indice > 0:
+                st.warning(f"📈 **Comparaison :** Les conditions réelles sur site sont plus fortes que prévu (**+{diff_indice} point(s)** d'indice d'agitation par rapport à la météo).")
+            elif diff_indice < 0:
+                st.info(f"📉 **Comparaison :** Les conditions réelles sur site sont plus calmes que prévu (**{diff_indice} point(s)** d'indice d'agitation par rapport à la météo).")
             else:
-                st.success("🎯 **Comparaison :** L'agitation réelle sur site est parfaitement conforme aux prévisions météo (0% d'écart).")
+                st.success("🎯 **Comparaison :** L'agitation réelle sur site est parfaitement conforme aux prévisions météo (0 point d'écart).")
