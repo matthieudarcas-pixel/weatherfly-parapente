@@ -1,3 +1,13 @@
+import streamlit as st
+import urllib.request
+import json
+import re
+from datetime import datetime, timedelta
+
+# --- CONFIGURATION INITIALE DE LA PAGE (Doit être la 1ère instruction Streamlit) ---
+st.set_page_config(page_title="WeatherFly - Assistant Vol Libre", layout="wide")
+
+# --- FONCTION DE SCRAPING DE LA BALISE (Déplacée APRÈS l'import de st) ---
 @st.cache_data(ttl=60, show_spinner=False)
 def recuperer_donnees_balise_reelles(balise_id):
     url = f"https://www.balisemeteo.com/balise.php?idBalise={balise_id}"
@@ -11,32 +21,27 @@ def recuperer_donnees_balise_reelles(balise_id):
             match_heure = re.search(r"(\d{2}:\d{2})", html_content)
             heure_reelle = match_heure.group(1) if match_heure else "09:40"
             
-            # 2. Extraction du Vent Moyen (vitesse standard)
+            # 2. Extraction du Vent Moyen
             match_moyen = re.search(r"Vent\s+moyen.+?Vitesse\s*:\s*([\d\.,]+)", html_content, re.DOTALL | re.IGNORECASE)
             vent_moyen = float(match_moyen.group(1).replace(',', '.')) if match_moyen else 5.0
             
-            # 3. Extraction du Vent Maxi Rouge
-            # On cherche le nombre présent dans une balise de couleur rouge (red / rouge) juste après "Vent maxi"
+            # 3. Extraction du Vent Maxi Rouge (via style CSS ou couleur HTML)
             match_maxi_rouge = re.search(r"Vent\s+maxi.+?(?:red|rouge|#ff0000).+?>\s*([\d\.,]+)\s*(?:km/h|Kmh|<)", html_content, re.DOTALL | re.IGNORECASE)
             
             if match_maxi_rouge:
                 vent_max = float(match_maxi_rouge.group(1).replace(',', '.'))
             else:
-                # Fallback de secours si le rouge est appliqué différemment (ex: juste après le mot Vitesse)
                 match_maxi_standard = re.search(r"Vent\s+maxi.+?Vitesse\s*:\s*.*?([\d\.,]+)", html_content, re.DOTALL | re.IGNORECASE)
                 if match_maxi_standard:
                     vent_max = float(match_maxi_standard.group(1).replace(',', '.'))
                 else:
-                    # Si le regex bloque encore, on prend le 3ème chiffre km/h de la page (le max)
                     chiffres = re.findall(r"([\d\.,]+)\s*(?:km/h|Kmh)", html_content, re.IGNORECASE)
                     valeurs = [float(v.replace(',', '.')) for v in chiffres if v.replace(',', '').isdigit()]
                     vent_max = valeurs[2] if len(valeurs) >= 3 else (valeurs[1] if len(valeurs) == 2 else 8.0)
 
-            # Sécurité anti-cohérence
             if vent_max < vent_moyen:
                 vent_max = vent_moyen + 3.0
 
-            # Calcul de l'indice
             delta_rafale = max(0.0, vent_max - vent_moyen)
             indice = min(10, round((delta_rafale / 3) + (vent_moyen / 5)))
             
@@ -49,3 +54,5 @@ def recuperer_donnees_balise_reelles(balise_id):
             }
     except Exception:
         return fallback
+
+# --- SUITE DE TON CODE (SPOTS_HIERARCHIE, INTERFACE GRAPHIC, ETC.) ---
