@@ -111,20 +111,41 @@ def recuperer_vraie_meteo(lat, lon, date_str):
 # --- 4. FONCTION DE RECHERCHE BALISE REELLE ---
 def recuperer_donnees_balise_reelles(balise_id):
     url = f"https://www.balisemeteo.com/balise.php?idBalise={balise_id}"
-    fallback = {"heure": "09:40", "vent_moyen": 5.0, "vent_max": 8.0, "indice": 1, "is_fallback": False}
+    fallback = {
+        "heure": "09:40", "vent_moyen": 5.0, "dir_moyen": "NC", 
+        "vent_max": 8.0, "dir_max": "NC", "indice": 1, "is_fallback": False
+    }
     try:
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req, timeout=4) as response:
             html_content = response.read().decode('utf-8')
             
+            # Extraction heure
             match_heure = re.search(r"(\d{2}:\d{2})", html_content)
             heure_reelle = match_heure.group(1) if match_heure else "09:40"
+            
+            # Extraction Vent Moyen : Direction et Vitesse
+            dir_moyen = "NC"
+            match_dir_moyen = re.search(r"Vent\s+moyen.+?Direction\s*:\s*([A-Z0-7°\s:]+?)(?:Vitesse|$)", html_content, re.DOTALL | re.IGNORECASE)
+            if match_dir_moyen:
+                dir_moyen = match_dir_moyen.group(1).strip().replace('\n', '').replace('\r', '')
+                dir_moyen = re.sub(r'\s+', ' ', dir_moyen)
             
             match_moyen = re.search(r"Vent\s+moyen.+?Vitesse\s*:\s*([\d\.,]+)", html_content, re.DOTALL | re.IGNORECASE)
             vent_moyen = float(match_moyen.group(1).replace(',', '.')) if match_moyen else 5.0
             
+            # Extraction Vent Maxi : Direction (avec gestion de la couleur rouge) et Vitesse
+            dir_max = "NC"
+            match_dir_max_rouge = re.search(r"Vent\s+maxi.+?Direction\s*:\s*.*?(?:red|rouge|#ff0000|color).+?>\s*([A-Z0-7°\s:]+?)</", html_content, re.DOTALL | re.IGNORECASE)
+            if match_dir_max_rouge:
+                dir_max = match_dir_max_rouge.group(1).strip().replace('\n', '').replace('\r', '')
+            else:
+                match_dir_max_std = re.search(r"Vent\s+maxi.+?Direction\s*:\s*([A-Z0-7°\s:]+?)(?:Vitesse|$)", html_content, re.DOTALL | re.IGNORECASE)
+                if match_dir_max_std:
+                    dir_max = match_dir_max_std.group(1).strip().replace('\n', '').replace('\r', '')
+            dir_max = re.sub(r'\s+', ' ', dir_max)
+
             match_maxi_rouge = re.search(r"Vent\s+maxi.+?(?:red|rouge|#ff0000|color).+?>\s*([\d\.,]+)", html_content, re.DOTALL | re.IGNORECASE)
-            
             if match_maxi_rouge:
                 vent_max = float(match_maxi_rouge.group(1).replace(',', '.'))
             else:
@@ -136,14 +157,19 @@ def recuperer_donnees_balise_reelles(balise_id):
 
             delta_rafale = max(0.0, vent_max - vent_moyen)
             indice = min(10, round((delta_rafale / 3) + (vent_moyen / 5)))
-            return {"heure": heure_reelle, "vent_moyen": vent_moyen, "vent_max": vent_max, "indice": max(1, indice), "is_fallback": False}
+            
+            return {
+                "heure": heure_reelle, 
+                "vent_moyen": vent_moyen, "dir_moyen": dir_moyen,
+                "vent_max": vent_max, "dir_max": dir_max, 
+                "indice": max(1, indice), "is_fallback": False
+            }
     except Exception:
         return fallback
 
 # --- 5. INTERFACE GRAPHIQUE STREAMLIT ---
 st.title("WeatherFly - Assistant Vol Libre")
 
-# Initialisation d'un état pour forcer le rafraîchissement manuel de la balise
 if "refresh_counter" not in st.session_state:
     st.session_state.refresh_counter = 0
 
@@ -169,7 +195,7 @@ with col_gauche:
     analyser_clic = st.button("RECHERCHER ET ANALYSER", type="primary")
     st.subheader("Verdict Météo & Aérologie")
     
-    indice_preve_actuel = 1  # Sera mis à jour dynamiquement selon l'heure actuelle
+    indice_preve_actuel = 1
     
     if analyser_clic:
         with st.spinner("Interrogation des serveurs météo..."):
@@ -199,7 +225,6 @@ with col_gauche:
                 delta_rafale = max(0, v_rafales - vitesse)
                 indice_agitation = min(10, round((delta_rafale / 3) + (vitesse / 5) + (cape_val / 200)))
                 
-                # Sauvegarde de l'indice prévu pour l'heure actuelle
                 if heure_int == heure_courante:
                     indice_preve_actuel = max(1, indice_agitation)
 
@@ -280,19 +305,16 @@ with col_droite:
         st.markdown("---")
         st.subheader("📡 Relevé Réel BaliseMétéo")
         
-        # Bouton de rafraîchissement manuel
         if st.button("🔄 Rafraîchir la balise", key="refresh_balise"):
             st.session_state.refresh_counter += 1
         
-        # Appel direct sans cache forcé pour correspondre à l'action du bouton
         balise_reelle = recuperer_donnees_balise_reelles(ffvl_id)
         
         st.write(f"• **Heure du relevé en direct :** {balise_reelle['heure']}")
-        st.write(f"• **Vent moyen constaté :** {balise_reelle['vent_moyen']} km/h")
-        st.write(f"• **Vent max constaté :** {balise_reelle['vent_max']} km/h")
+        st.write(f"• **Vent moyen constaté :** {balise_reelle['vent_moyen']} km/h ({balise_reelle['dir_moyen']})")
+        st.write(f"• **Vent max constaté :** {balise_reelle['vent_max']} km/h ({balise_reelle['dir_max']})")
         st.write(f"• **Indice d'agitation réel :** {balise_reelle['indice']}/10")
         
-        # Comparaison en % entre le prévu et le réel
         if 'hourly_data' in locals() and hourly_data:
             diff_pourcent = round(((balise_reelle['indice'] - indice_preve_actuel) / indice_preve_actuel) * 100)
             if diff_pourcent > 0:
