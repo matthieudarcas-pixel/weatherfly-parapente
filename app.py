@@ -44,7 +44,22 @@ SPOTS_HIERARCHIE = {
 
 COMPASS_ANGLES = {"N": 0, "NE": 45, "E": 90, "SE": 135, "S": 180, "SO": 225, "O": 270, "NO": 315}
 
-# --- 3. FONCTIONS UTILITAIRES ---
+# --- 3. DICTIONNAIRES DE DÉCODAGE TEXTE DES CRITÈRES ---
+def get_vols_comment(v):
+    if v <= 15: return "(Vol guidé en école requis, début de l'apprentissage)"
+    if v <= 35: return "(Phase d'autonomie initiale en conditions calmes)"
+    if v <= 65: return "(Progression vers le brevet initial, ouverture aux premiers thermiques)"
+    if v <= 100: return "(Pilote de site vu régulièrement, gestion des brises classiques)"
+    if v <= 199: return "(Expérience solide, autonomie sur la majorité des sites connus)"
+    return "(Volume de maturité : Expérience suffisante pour aborder tout type de site en sécurité)"
+
+def get_skill_comment(val):
+    if val <= 2: return "Niveau Initiation / Assistance indispensable"
+    if val <= 5: return "Niveau Intermédiaire / Pratique en conditions calmes à modérées"
+    if val <= 8: return "Niveau Avancé / Fluidité et bonnes parades en conditions classiques"
+    return "Maîtrise absolue / Sérénité, rigueur et sécurité totale acquise"
+
+# --- 4. FONCTIONS UTILITAIRES ---
 def convertir_degres_en_direction(degres):
     if (degres >= 337.5) or (degres < 22.5): return "N"
     if 22.5 <= degres < 67.5: return "NE"
@@ -118,7 +133,6 @@ def recuperer_donnees_balise_reelles(balise_id):
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req, timeout=4) as response:
             html_raw = response.read().decode('utf-8')
-            
             text_clean = re.sub(r'<[^>]*>', ' ', html_raw)
             text_clean = re.sub(r'\s+', ' ', text_clean)
             
@@ -163,26 +177,78 @@ col_gauche, col_droite = st.columns([3, 2])
 
 with col_gauche:
     # --- PROFIL PILOTE ---
-    st.subheader("👤 1. Profil & Autonomie du Pilote")
-    ploufs = st.number_input("Expérience (Nombre de ploufs) :", min_value=0, max_value=1000, value=15)
+    st.subheader("👤 1. Calculateur de Niveau Pilote")
     
-    col_chk1, col_chk2 = st.columns(2)
-    with col_chk1: m_oreilles = st.checkbox("Maitrise des Grandes Oreilles")
-    with col_chk2: m_face = st.checkbox("Maitrise du Gonflage Face Voile (>15km/h)")
+    # Nouvelle formule d'expérience : 100% du score (3 pts) atteint dès 200 vols
+    vols = st.slider("Volume de vols cumulés :", min_value=0, max_value=500, value=10, step=5)
+    st.caption(get_vols_comment(vols))
     
-    # Calcul Note Pilote
-    note_pilote_brute = 1
-    if ploufs < 10: note_pilote_brute = 2
-    elif ploufs < 20: note_pilote_brute = 4
-    elif ploufs <= 40: note_pilote_brute = 6
-    elif ploufs <= 100: note_pilote_brute = 8
-    else: note_pilote_brute = 10
+    notes_competences = []
+
+    with st.expander("🪁 Techniques au Sol"):
+        c1 = st.slider("Gonflage dos voile :", 0, 10, 0, help="De 0 (guidage requis) à 10 (pente raide/espace restreint sans vent)")
+        st.caption(get_skill_comment(c1))
+        c2 = st.slider("Gonflage face voile :", 0, 10, 0, help="De 0 (non pratiqué) à 10 (jeu au sol instinctif dans les rafales)")
+        st.caption(get_skill_comment(c2))
+        c3 = st.slider("Gonflage technique & vent fort :", 0, 10, 0, help="De 0 (danger potentiel) à 10 (haute montagne/déco engagé ou technique)")
+        st.caption(get_skill_comment(c3))
+        c4 = st.slider("Pré-vol et check-list de sécurité :", 0, 10, 0, help="De 0 (oublis fréquents) à 10 (rigueur absolue contre les automatismes)")
+        st.caption(get_skill_comment(c4))
+        notes_competences.extend([c1, c2, c3, c4])
+
+    with st.expander("🪂 Techniques en Vol"):
+        c5 = st.slider("Gestion du plan d'approche (PTU / PTR) :", 0, 10, 0, help="De 0 (guidage requis) à 10 (précision chirurgicale tout gradient)")
+        st.caption(get_skill_comment(c5))
+        c6 = st.slider("Atterrissage hors terrain (Vachage) :", 0, 10, 0, help="De 0 (à proscrire) à 10 (adaptation immédiate sur zone inconnue)")
+        st.caption(get_skill_comment(c6))
+        c7 = st.slider("Virages coordonnés (roulis/tangage) :", 0, 10, 0, help="De 0 (sur-pilotage fréquent) à 10 (pilotage instinctif fluide)")
+        st.caption(get_skill_comment(c7))
+        c8 = st.slider("Pilotage actif en turbulences :", 0, 10, 0, help="De 0 (crispation aux commandes) à 10 (vol fluide en air agité)")
+        st.caption(get_skill_comment(c8))
+        c9 = st.slider("Gestion des incidents (fermetures) :", 0, 10, 0, help="De 0 (panique/pas de réflexe) à 10 (calme olympien, bagage SIV complet)")
+        st.caption(get_skill_comment(c9))
+        c10 = st.slider("Exploitation du soaring :", 0, 10, 0, help="De 0 (vol balistique) à 10 (optimisation du relief par vent faible ou fort)")
+        st.caption(get_skill_comment(c10))
+        c11 = st.slider("Exploitation des thermiques :", 0, 10, 0, help="De 0 (simple traversée) à 10 (analyse complète et montée sereine)")
+        st.caption(get_skill_comment(c11))
+        c12 = st.slider("Pilotage aux arrières & accélérateur :", 0, 10, 0, help="De 0 (source d'inquiétude) à 10 (utilisation reflexe de toute la plage)")
+        st.caption(get_skill_comment(c12))
+        notes_competences.extend([c5, c6, c7, c8, c9, c10, c11, c12])
+
+    with st.expander("🧠 Analyse & Sécurité"):
+        c13 = st.slider("Analyse de la manche à air :", 0, 10, 0, help="De 0 (lecture ardue) à 10 (décodage complet de l'environnement)")
+        st.caption(get_skill_comment(c13))
+        c14 = st.slider("Analyse météo et aérologique :", 0, 10, 0, help="De 0 (dépendance aux icônes) à 10 (compréhension fine émagramme/pièges)")
+        st.caption(get_skill_comment(c14))
+        c15 = st.slider("Planification de vol (Cheminement) :", 0, 10, 0, help="De 0 (vol local strict) à 10 (gestion des espaces et secours permanents)")
+        st.caption(get_skill_comment(c15))
+        c16 = st.slider("Prise de décision & Renoncement :", 0, 10, 0, help="De 0 (effet mouton) à 10 (sagesse aéronautique, savoir dire non acquis)")
+        st.caption(get_skill_comment(c16))
+        notes_competences.extend([c13, c14, c15, c16])
+
+    # Calcul algorithmique ajusté : vols à 100% dès 200 vols
+    avg_skills = sum(notes_competences) / len(notes_competences)
+    vols_score = min(3.0, (vols / 200) * 3)
     
-    if m_oreilles: note_pilote_brute += 1
-    if m_face: note_pilote_brute += 1
-    note_pilote = min(10, max(1, note_pilote_brute))
-    
-    st.info(f"📊 **Note d'autonomie pilote estimée :** {note_pilote} / 10")
+    final_score = (avg_skills * 0.7) + vols_score
+    if vols <= 10 and avg_skills == 0:
+        final_score = 0.0
+    final_score = min(10.0, final_score)
+    note_pilote = max(1, round(final_score))
+
+    # Application du nouveau classement plafonné
+    if final_score < 0.5:
+        rank = "Grand Débutant"
+    elif final_score < 3.0:
+        rank = "Autonomie Initiale (Niveau 1-2)"
+    elif final_score < 5.0:
+        rank = "Autonomie Confirmée / Brevet Initial (Niveau 3-4)"
+    elif final_score < 7.0:
+        rank = "Pilote de Site / Brevet Pilote (Niveau 5-6)"
+    else:
+        rank = "Autonome sur tout type de site en toute condition météo sans se mettre en danger"
+
+    st.info(f"📊 **Statut :** {rank}  \n🎯 **Note finale calculée :** {final_score:.1f}/10 (Arrondie à : {note_pilote}/10)")
     
     st.markdown("---")
     
@@ -200,7 +266,7 @@ with col_gauche:
     st.markdown("---")
     analyser_clic = st.button("RECHERCHER ET ANALYSER", type="primary")
     
-    # --- BLOC VERROUILLÉ : VERDICT ---
+    # --- VERDICT METEO ---
     st.subheader("Verdict Météo & Aérologie")
     indice_preve_actuel = 1
     
@@ -213,8 +279,9 @@ with col_gauche:
             data_par_heure = {}  
             facteurs_limitants = set()
             historique_vents = []
-            vent_max_autorise = 15 if ploufs < 20 else (20 if ploufs <= 40 else 26)
-            seuil_agitation_max = 6 if ploufs < 20 else (8 if ploufs <= 40 else 10)
+            
+            vent_max_autorise = 15 if note_pilote <= 3 else (20 if note_pilote <= 6 else 26)
+            seuil_agitation_max = 6 if note_pilote <= 3 else (8 if note_pilote <= 6 else 10)
             
             heure_courante = datetime.now().hour
 
@@ -242,9 +309,9 @@ with col_gauche:
                     cause_heure = f"☀️ Agitation thermique ({indice_agitation}/10)"
                     facteurs_limitants.add(f"☀️ Aérologie trop agitée ({indice_agitation}/10 > {seuil_agitation_max}/10)")
                     heure_bloquee = True
-                elif not m_oreilles and indice_agitation >= 8:
-                    cause_heure = f"🔥 Thermique marqué sans oreilles"
-                    facteurs_limitants.add("🔥 Pic thermique (maîtrise des oreilles requise)")
+                elif c9 < 5 and indice_agitation >= 8:  
+                    cause_heure = f"🔥 Thermique marqué (Maîtrise incidents requise)"
+                    facteurs_limitants.add("🔥 Pic thermique (Maîtrise des fermetures/incidents insuffisante)")
                     heure_bloquee = True
 
                 if heure_bloquee:
@@ -263,9 +330,9 @@ with col_gauche:
                     cause_heure = f"💨 Trop fort ({vitesse} km/h)"
                     facteurs_limitants.add(f"💨 Vitesse du vent supérieure à ton maximum autorisé ({vent_max_autorise} km/h)")
                     heure_bloquee = True
-                elif vitesse > 15 and not m_face:
+                elif vitesse > 15 and c2 < 5:  
                     cause_heure = f"🛑 Face voile requis ({vitesse} km/h)"
-                    facteurs_limitants.add("🛑 Gonflage face voile non coché (requis dès 15 km/h)")
+                    facteurs_limitants.add("🛑 Gonflage face voile insuffisant (Requis dès 15 km/h)")
                     heure_bloquee = True
                 elif vitesse > 5 and not valider_axe_vent(direction, spot_config["deco"]):
                     cause_heure = f"🧭 Vent de travers/arrière ({direction})"
@@ -296,11 +363,11 @@ with col_droite:
     # --- BLOC VERROUILLÉ : RÈGLES ---
     st.subheader("Règles de Sécurité Intégrales")
     st.markdown("""
-    *   **Niveau Débutant (< 20 ploufs) :** Max **15 km/h** | Agitation max **6/10**. Le thermique fort est à proscrire.
-    *   **Niveau Progression (20 à 40 ploufs) :** Max **20 km/h** | Agitation max **8/10**. Maîtrise des petites turbulences.
-    *   **Niveau Confirmé (> 40 ploufs) :** Max **26 km/h** | Agitation max **10/10**. Gestion des conditions fortes.
-    *   **Règle du Face Voile :** Obligatoire si le vent moyen dépasse **15 km/h** pour assurer un décollage en sécurité.
-    *   **Règle des Oreilles :** Interdiction de voler si l'indice d'agitation prévu atteint **8/10** sans maîtrise validée de la technique de descente rapide.
+    *   **Niveau Débutant (Note 1-3) :** Max **15 km/h** | Agitation max **6/10**. Le thermique fort est à proscrire.
+    *   **Niveau Progression (Note 4-6) :** Max **20 km/h** | Agitation max **8/10**. Maîtrise des petites turbulences.
+    *   **Niveau Confirmé (Note 7-10) :** Max **26 km/h** | Agitation max **10/10**. Gestion des conditions fortes et autonomie toutes masses d'air.
+    *   **Règle du Face Voile :** Niveau intermédiaire requis sur le curseur Sol (Note >= 5) si le vent moyen dépasse **15 km/h** pour assurer un décollage en sécurité.
+    *   **Règle des Incidents :** Interdiction de voler si l'indice d'agitation prévu atteint **8/10** sans une note minimale de 5 en gestion des incidents (SIV/Fermetures).
     """)
     
     # --- BLOC VERROUILLÉ : SPÉ SPOT ---
@@ -316,7 +383,6 @@ with col_droite:
         st.subheader("📡 Relevé Réel BaliseMétéo")
         st.markdown(f"[Accéder à la page de la balise FFVL n°{ffvl_id}](https://www.balisemeteo.com/balise.php?idBalise={ffvl_id})")
         
-        # CONDITION : Uniquement actif si la date sélectionnée est AUJOURD'HUI
         if date_selectionnee == aujourd_hui_str:
             if st.button("🔄 Rafraîchir la balise", key="refresh_balise"):
                 st.session_state.refresh_counter += 1
@@ -330,7 +396,6 @@ with col_droite:
             
             if 'hourly_data' in locals() and hourly_data:
                 diff_indice = balise_reelle['indice'] - indice_preve_actuel
-                
                 if diff_indice > 0:
                     st.warning(f"📈 **Comparaison :** Les conditions réelles sur site sont plus fortes que prévu (**+{diff_indice} point(s)** d'indice d'agitation par rapport à la météo).")
                 elif diff_indice < 0:
