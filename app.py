@@ -157,6 +157,8 @@ st.title("WeatherFly - Assistant Vol Libre")
 if "refresh_counter" not in st.session_state:
     st.session_state.refresh_counter = 0
 
+aujourd_hui_str = datetime.now().strftime("%Y-%m-%d")
+
 col_gauche, col_droite = st.columns([3, 2])
 
 with col_gauche:
@@ -198,7 +200,7 @@ with col_gauche:
     st.markdown("---")
     analyser_clic = st.button("RECHERCHER ET ANALYSER", type="primary")
     
-    # --- BLOC ENVELOPPÉ : VERDICT MÉTÉO ---
+    # --- BLOC VERROUILLÉ : VERDICT ---
     st.subheader("Verdict Météo & Aérologie")
     indice_preve_actuel = 1
     
@@ -276,7 +278,6 @@ with col_gauche:
                     heures_valides_int.append(heure_int)
                     data_par_heure[heure_int] = {"vitesse": vitesse, "indice": indice_agitation}
 
-            # Affichage du Verdict Météo
             liste_fenetres = formater_fenetres(heures_valides_int, data_par_heure)
             if liste_fenetres:
                 st.success("🟢 FEU VERT POUR LE VOL")
@@ -315,22 +316,26 @@ with col_droite:
         st.subheader("📡 Relevé Réel BaliseMétéo")
         st.markdown(f"[Accéder à la page de la balise FFVL n°{ffvl_id}](https://www.balisemeteo.com/balise.php?idBalise={ffvl_id})")
         
-        if st.button("🔄 Rafraîchir la balise", key="refresh_balise"):
-            st.session_state.refresh_counter += 1
-        
-        balise_reelle = recuperer_donnees_balise_reelles(ffvl_id)
-        
-        st.write(f"• **Heure du relevé en direct :** {balise_reelle['heure']}")
-        st.write(f"• **Vent moyen constaté :** {balise_reelle['vent_moyen']} km/h ({balise_reelle['dir_moyen']})")
-        st.write(f"• **Vent max constaté :** {balise_reelle['vent_max']} km/h ({balise_reelle['dir_max']})")
-        st.write(f"• **Indice d'agitation réel :** {balise_reelle['indice']}/10")
-        
-        if 'hourly_data' in locals() and hourly_data:
-            diff_indice = balise_reelle['indice'] - indice_preve_actuel
+        # CONDITION : Uniquement actif si la date sélectionnée est AUJOURD'HUI
+        if date_selectionnee == aujourd_hui_str:
+            if st.button("🔄 Rafraîchir la balise", key="refresh_balise"):
+                st.session_state.refresh_counter += 1
             
-            if diff_indice > 0:
-                st.warning(f"📈 **Comparaison :** Les conditions réelles sur site sont plus fortes que prévu (**+{diff_indice} point(s)** d'indice d'agitation par rapport à la météo).")
-            elif diff_indice < 0:
-                st.info(f"📉 **Comparaison :** Les conditions réelles sur site sont plus calmes que prévu (**{diff_indice} point(s)** d'indice d'agitation par rapport à la météo).")
-            else:
-                st.success("🎯 **Comparaison :** L'agitation réelle sur site est parfaitement conforme aux prévisions météo (0 point d'écart).")
+            balise_reelle = recuperer_donnees_balise_reelles(ffvl_id)
+            
+            st.write(f"• **Heure du relevé en direct :** {balise_reelle['heure']}")
+            st.write(f"• **Vent moyen constaté :** {balise_reelle['vent_moyen']} km/h ({balise_reelle['dir_moyen']})")
+            st.write(f"• **Vent max constaté :** {balise_reelle['vent_max']} km/h ({balise_reelle['dir_max']})")
+            st.write(f"• **Indice d'agitation réel :** {balise_reelle['indice']}/10")
+            
+            if 'hourly_data' in locals() and hourly_data:
+                diff_indice = balise_reelle['indice'] - indice_preve_actuel
+                
+                if diff_indice > 0:
+                    st.warning(f"📈 **Comparaison :** Les conditions réelles sur site sont plus fortes que prévu (**+{diff_indice} point(s)** d'indice d'agitation par rapport à la météo).")
+                elif diff_indice < 0:
+                    st.info(f"📉 **Comparaison :** Les conditions réelles sur site sont plus calmes que prévu (**{diff_indice} point(s)** d'indice d'agitation par rapport à la météo).")
+                else:
+                    st.success("🎯 **Comparaison :** L'agitation réelle sur site est parfaitement conforme aux prévisions météo (0 point d'écart).")
+        else:
+            st.info("ℹ️ Les données en temps réel et le bouton de rafraîchissement ne sont disponibles que pour le jour J.")
