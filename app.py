@@ -48,6 +48,7 @@ COMPASS_ANGLES = {"N": 0, "NE": 45, "E": 90, "SE": 135, "S": 180, "SO": 225, "O"
 def convertir_degres_en_direction(degres):
     if (degres >= 337.5) or (degres < 22.5): return "N"
     if 22.5 <= degres < 67.5: return "NE"
+    if 67.5 <= degres < 112.5: return "E"
     if 112.5 <= degres < 157.5: return "SE"
     if 157.5 <= degres < 202.5: return "S"
     if 202.5 <= degres < 247.5: return "SO"
@@ -116,28 +117,23 @@ def recuperer_donnees_balise_reelles(balise_id):
         with urllib.request.urlopen(req, timeout=4) as response:
             html_content = response.read().decode('utf-8')
             
-            # Extraction heure
             match_heure = re.search(r"(\d{2}:\d{2})", html_content)
             heure_reelle = match_heure.group(1) if match_heure else "09:40"
             
-            # Extraction vent moyen
             match_moyen = re.search(r"Vent\s+moyen.+?Vitesse\s*:\s*([\d\.,]+)", html_content, re.DOTALL | re.IGNORECASE)
             vent_moyen = float(match_moyen.group(1).replace(',', '.')) if match_moyen else 5.0
             
-            # Extraction vent max ciblant spécifiquement la couleur rouge HTML / CSS
             match_maxi_rouge = re.search(r"Vent\s+maxi.+?(?:red|rouge|#ff0000|color).+?>\s*([\d\.,]+)", html_content, re.DOTALL | re.IGNORECASE)
             
             if match_maxi_rouge:
                 vent_max = float(match_maxi_rouge.group(1).replace(',', '.'))
             else:
-                # Système B : extraction textuelle standard
                 match_maxi_standard = re.search(r"Vent\s+maxi.+?Vitesse\s*:\s*.*?([\d\.,]+)", html_content, re.DOTALL | re.IGNORECASE)
                 if match_maxi_standard:
                     vent_max = float(match_maxi_standard.group(1).replace(',', '.'))
                 else:
                     vent_max = vent_moyen + 3.0
 
-            # Calcul d'indice
             delta_rafale = max(0.0, vent_max - vent_moyen)
             indice = min(10, round((delta_rafale / 3) + (vent_moyen / 5)))
             return {"heure": heure_reelle, "vent_moyen": vent_moyen, "vent_max": vent_max, "indice": max(1, indice), "is_fallback": False}
@@ -146,6 +142,10 @@ def recuperer_donnees_balise_reelles(balise_id):
 
 # --- 5. INTERFACE GRAPHIQUE STREAMLIT ---
 st.title("WeatherFly - Assistant Vol Libre")
+
+# Initialisation d'un état pour forcer le rafraîchissement manuel de la balise
+if "refresh_counter" not in st.session_state:
+    st.session_state.refresh_counter = 0
 
 col_gauche, col_droite = st.columns([3, 2])
 
@@ -169,6 +169,8 @@ with col_gauche:
     analyser_clic = st.button("RECHERCHER ET ANALYSER", type="primary")
     st.subheader("Verdict Météo & Aérologie")
     
+    indice_preve_actuel = 1  # Sera mis à jour dynamiquement selon l'heure actuelle
+    
     if analyser_clic:
         with st.spinner("Interrogation des serveurs météo..."):
             hourly_data = recuperer_vraie_meteo(spot_config["lat"], spot_config["lon"], date_selectionnee)
@@ -180,6 +182,8 @@ with col_gauche:
             historique_vents = []
             vent_max_autorise = 15 if ploufs < 20 else (20 if ploufs <= 40 else 26)
             seuil_agitation_max = 6 if ploufs < 20 else (8 if ploufs <= 40 else 10)
+            
+            heure_courante = datetime.now().hour
 
             for i in range(len(hourly_data["time"])):
                 heure_texte = hourly_data["time"][i].split("T")[1][:5]
@@ -194,17 +198,21 @@ with col_gauche:
 
                 delta_rafale = max(0, v_rafales - vitesse)
                 indice_agitation = min(10, round((delta_rafale / 3) + (vitesse / 5) + (cape_val / 200)))
+                
+                # Sauvegarde de l'indice prévu pour l'heure actuelle
+                if heure_int == heure_courante:
+                    indice_preve_actuel = max(1, indice_agitation)
 
                 heure_bloquee = False
                 cause_heure = ""
                 
                 if indice_agitation > seuil_agitation_max:
                     cause_heure = f"☀️ Agitation thermique ({indice_agitation}/10)"
-                    facteurs_limitants.add(f"☀️ Aérologie trop agitée")
+                    facteurs_limitants.add(f"☀️ Aérologie trop agitée ({indice_agitation}/10 > {seuil_agitation_max}/10)")
                     heure_bloquee = True
                 elif not m_oreilles and indice_agitation >= 8:
                     cause_heure = f"🔥 Thermique marqué sans oreilles"
-                    facteurs_limitants.add("🔥 Pic thermique (oreilles requises)")
+                    facteurs_limitants.add("🔥 Pic thermique (maîtrise des oreilles requise)")
                     heure_bloquee = True
 
                 if heure_bloquee:
@@ -213,23 +221,23 @@ with col_gauche:
 
                 if spot_config["interdit_sud"] and direction in ["S", "SO", "SE"] and vitesse > 10:
                     cause_heure = f"⚠️ Danger Sud ({vitesse} km/h)"
-                    facteurs_limitants.add("⚠️ Danger Vent de Sud")
+                    facteurs_limitants.add(f"⚠️ Danger Vent de Sud sur ce spot par vent > 10 km/h")
                     heure_bloquee = True
                 elif pluie > 0.1: 
-                    cause_heure = f"🌧️ Pluie"
-                    facteurs_limitants.add("🌧️ Précipitations")
+                    cause_heure = f"🌧️ Pluie ({pluie} mm)"
+                    facteurs_limitants.add("🌧️ Risque de précipitations")
                     heure_bloquee = True
                 elif vitesse > vent_max_autorise:
                     cause_heure = f"💨 Trop fort ({vitesse} km/h)"
-                    facteurs_limitants.add(f"💨 Vent trop fort")
+                    facteurs_limitants.add(f"💨 Vitesse du vent supérieure à ton maximum autorisé ({vent_max_autorise} km/h)")
                     heure_bloquee = True
                 elif vitesse > 15 and not m_face:
-                    cause_heure = f"🛑 Face voile requis"
-                    facteurs_limitants.add("🛑 Face voile requis")
+                    cause_heure = f"🛑 Face voile requis ({vitesse} km/h)"
+                    facteurs_limitants.add("🛑 Gonflage face voile non coché (requis dès 15 km/h)")
                     heure_bloquee = True
                 elif vitesse > 5 and not valider_axe_vent(direction, spot_config["deco"]):
-                    cause_heure = f"🧭 Vent de travers ({direction})"
-                    facteurs_limitants.add("🧭 Vent arrière ou travers")
+                    cause_heure = f"🧭 Vent de travers/arrière ({direction})"
+                    facteurs_limitants.add(f"🧭 Alignement déco défavorable (Vent de travers/arrière : {direction})")
                     heure_bloquee = True
 
                 if heure_bloquee:
@@ -247,32 +255,49 @@ with col_gauche:
                 for cause in facteurs_limitants: st.write(f"• {cause}")
                 
             if historique_vents:
-                st.markdown("**Détail horaire :**")
+                st.markdown("**Détail de la journée :**")
                 for h_hist in historique_vents: st.write(h_hist)
         else:
             st.warning("Impossible de récupérer les prévisions Open-Meteo.")
 
 with col_droite:
-    st.subheader("Guide des Règles")
+    st.subheader("Règles de Sécurité Intégrales")
     st.markdown("""
-    - **Débutant (<20 ploufs) :** Max 15 km/h | Agitation Max 6/10.
-    - **Progression (20-40 ploufs) :** Max 20 km/h | Agitation Max 8/10.
-    - **Confirmé (>40 ploufs) :** Max 26 km/h | Agitation Max 10/10.
+    *   **Niveau Débutant (< 20 ploufs) :** Max **15 km/h** | Agitation max **6/10**. Le thermique fort est à proscrire.
+    *   **Niveau Progression (20 à 40 ploufs) :** Max **20 km/h** | Agitation max **8/10**. Maîtrise des petites turbulences.
+    *   **Niveau Confirmé (> 40 ploufs) :** Max **26 km/h** | Agitation max **10/10**. Gestion des conditions fortes.
+    *   **Règle du Face Voile :** Obligatoire si le vent moyen dépasse **15 km/h** pour assurer un décollage en sécurité.
+    *   **Règle des Oreilles :** Interdiction de voler si l'indice d'agitation prévu atteint **8/10** sans maîtrise validée de la technique de descente rapide.
     """)
     
     st.markdown("---")
-    st.subheader("📌 Spécificités")
+    st.subheader("📌 Spécificités du Spot")
     st.write(spot_config["conseil_site"])
-    st.write(f"• **Déco :** {', '.join(spot_config['deco'])}")
+    st.write(f"• **Orientations Déco acceptées :** {', '.join(spot_config['deco'])}")
     
     ffvl_id = spot_config.get("balise_ffvl_id")
     if ffvl_id:
         st.markdown("---")
-        st.subheader("📡 Relevé BaliseMétéo")
+        st.subheader("📡 Relevé Réel BaliseMétéo")
         
+        # Bouton de rafraîchissement manuel
+        if st.button("🔄 Rafraîchir la balise", key="refresh_balise"):
+            st.session_state.refresh_counter += 1
+        
+        # Appel direct sans cache forcé pour correspondre à l'action du bouton
         balise_reelle = recuperer_donnees_balise_reelles(ffvl_id)
         
-        st.write(f"• **Heure du relevé :** {balise_reelle['heure']}")
-        st.write(f"• **Vent moyen :** {balise_reelle['vent_moyen']} km/h")
-        st.write(f"• **Vent max :** {balise_reelle['vent_max']} km/h")
-        st.write(f"• **Indice d'agitation :** {balise_reelle['indice']}/10")
+        st.write(f"• **Heure du relevé en direct :** {balise_reelle['heure']}")
+        st.write(f"• **Vent moyen constaté :** {balise_reelle['vent_moyen']} km/h")
+        st.write(f"• **Vent max constaté :** {balise_reelle['vent_max']} km/h")
+        st.write(f"• **Indice d'agitation réel :** {balise_reelle['indice']}/10")
+        
+        # Comparaison en % entre le prévu et le réel
+        if 'hourly_data' in locals() and hourly_data:
+            diff_pourcent = round(((balise_reelle['indice'] - indice_preve_actuel) / indice_preve_actuel) * 100)
+            if diff_pourcent > 0:
+                st.warning(f"📈 **Comparaison :** Les conditions réelles sur site sont **{diff_pourcent}% plus agitées** que les prévisions météo initiales.")
+            elif diff_pourcent < 0:
+                st.info(f"📉 **Comparaison :** Les conditions réelles sur site sont **{abs(diff_pourcent)}% plus calmes** que les prévisions météo initiales.")
+            else:
+                st.success("🎯 **Comparaison :** L'agitation réelle sur site est parfaitement conforme aux prévisions météo (0% d'écart).")
