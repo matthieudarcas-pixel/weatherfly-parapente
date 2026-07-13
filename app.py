@@ -108,52 +108,41 @@ def recuperer_vraie_meteo(lat, lon, date_str):
     except Exception:
         return {}
 
-# --- 4. FONCTION DE RECHERCHE BALISE REELLE ---
+# --- 4. FONCTION DE RECHERCHE BALISE REELLE MODIFIÉE ---
 def recuperer_donnees_balise_reelles(balise_id):
     url = f"https://www.balisemeteo.com/balise.php?idBalise={balise_id}"
     fallback = {
         "heure": "09:40", "vent_moyen": 5.0, "dir_moyen": "NC", 
-        "vent_max": 8.0, "dir_max": "NC", "indice": 1, "is_fallback": False
+        "vent_max": 8.0, "dir_max": "NC", "indice": 1, "is_fallback": True
     }
     try:
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req, timeout=4) as response:
-            html_content = response.read().decode('utf-8')
+            html_raw = response.read().decode('utf-8')
+            
+            # 1. On nettoie tout le HTML pour travailler sur du texte brut standardisé
+            text_clean = re.sub(r'<[^>]*>', ' ', html_raw)
+            text_clean = re.sub(r'\s+', ' ', text_clean)
             
             # Extraction heure
-            match_heure = re.search(r"(\d{2}:\d{2})", html_content)
+            match_heure = re.search(r"Relevé du \d{2}/\d{2}/\d{4} - (\d{2}:\d{2})", text_clean)
             heure_reelle = match_heure.group(1) if match_heure else "09:40"
             
-            # Extraction Vent Moyen : Direction et Vitesse
+            # Extraction Vent Moyen
             dir_moyen = "NC"
-            match_dir_moyen = re.search(r"Vent\s+moyen.+?Direction\s*:\s*([A-Z0-7°\s:]+?)(?:Vitesse|$)", html_content, re.DOTALL | re.IGNORECASE)
-            if match_dir_moyen:
-                dir_moyen = match_dir_moyen.group(1).strip().replace('\n', '').replace('\r', '')
-                dir_moyen = re.sub(r'\s+', ' ', dir_moyen)
-            
-            match_moyen = re.search(r"Vent\s+moyen.+?Vitesse\s*:\s*([\d\.,]+)", html_content, re.DOTALL | re.IGNORECASE)
-            vent_moyen = float(match_moyen.group(1).replace(',', '.')) if match_moyen else 5.0
-            
-            # Extraction Vent Maxi : Direction (avec gestion de la couleur rouge) et Vitesse
+            vent_moyen = 5.0
+            match_moyen = re.search(r"Vent moyen Direction\s*:\s*(.+?)\s*Vitesse\s*:\s*([\d\.,]+)", text_clean, re.IGNORECASE)
+            if match_moyen:
+                dir_moyen = match_moyen.group(1).strip()
+                vent_moyen = float(match_moyen.group(2).replace(',', '.'))
+                
+            # Extraction Vent Maxi
             dir_max = "NC"
-            match_dir_max_rouge = re.search(r"Vent\s+maxi.+?Direction\s*:\s*.*?(?:red|rouge|#ff0000|color).+?>\s*([A-Z0-7°\s:]+?)</", html_content, re.DOTALL | re.IGNORECASE)
-            if match_dir_max_rouge:
-                dir_max = match_dir_max_rouge.group(1).strip().replace('\n', '').replace('\r', '')
-            else:
-                match_dir_max_std = re.search(r"Vent\s+maxi.+?Direction\s*:\s*([A-Z0-7°\s:]+?)(?:Vitesse|$)", html_content, re.DOTALL | re.IGNORECASE)
-                if match_dir_max_std:
-                    dir_max = match_dir_max_std.group(1).strip().replace('\n', '').replace('\r', '')
-            dir_max = re.sub(r'\s+', ' ', dir_max)
-
-            match_maxi_rouge = re.search(r"Vent\s+maxi.+?(?:red|rouge|#ff0000|color).+?>\s*([\d\.,]+)", html_content, re.DOTALL | re.IGNORECASE)
-            if match_maxi_rouge:
-                vent_max = float(match_maxi_rouge.group(1).replace(',', '.'))
-            else:
-                match_maxi_standard = re.search(r"Vent\s+maxi.+?Vitesse\s*:\s*.*?([\d\.,]+)", html_content, re.DOTALL | re.IGNORECASE)
-                if match_maxi_standard:
-                    vent_max = float(match_maxi_standard.group(1).replace(',', '.'))
-                else:
-                    vent_max = vent_moyen + 3.0
+            vent_max = vent_moyen + 3.0
+            match_maxi = re.search(r"Vent maxi Direction\s*:\s*(.+?)\s*Vitesse\s*:\s*([\d\.,]+)", text_clean, re.IGNORECASE)
+            if match_maxi:
+                dir_max = match_maxi.group(1).strip()
+                vent_max = float(match_maxi.group(2).replace(',', '.'))
 
             delta_rafale = max(0.0, vent_max - vent_moyen)
             indice = min(10, round((delta_rafale / 3) + (vent_moyen / 5)))
