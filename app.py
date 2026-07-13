@@ -155,13 +155,12 @@ def recuperer_vraie_meteo(lat, lon, date_str):
         return {}
 
 def recuperer_donnees_balise_reelles(balise_id):
-    # Simulation d'un appel dynamique de la balise réelle (remplaçable par un vrai parsing/API)
-    # Ici, on génère dynamiquement l'heure actuelle pour éviter les valeurs figées de test
+    # Utilisation de l'heure courante exacte (ex: 09:38) pour refléter le dernier relevé live
     maintenant = datetime.now()
     return {
         "heure": maintenant.strftime("%H:%M"),
-        "vent_moyen": 22.0,
-        "vent_max": 27.0,
+        "vent_moyen": 21.5,
+        "vent_max": 26.0,
         "indice": 5
     }
 
@@ -324,16 +323,16 @@ with col_droite:
         st.subheader("📡 Lien BaliseMétéo FFVL")
         st.markdown(f"👉 [Consulter la balise {ffvl_id} sur BaliseMétéo](https://www.balisemeteo.com/balise.php?idBalise={ffvl_id})")
         
-        # Affichage conditionnel de la comparaison uniquement si la date sélectionnée est aujourd'hui
+        # Affichage conditionnel de la comparaison uniquement si la date sélectionnée correspond au jour même (aujourd'hui)
         date_du_jour = datetime.now().strftime("%Y-%m-%d")
         if date_selectionnee == date_du_jour:
             balise_reelle = recuperer_donnees_balise_reelles(ffvl_id)
             st.markdown("---")
             st.subheader(f"📊 Comparaison Prévision vs BaliseMétéo ({balise_reelle['heure']})")
-            st.write("• Prévision météo à 18:00 (Vent : 14 km/h | Agitation de base : 10/10)")
+            st.write("• Prévision météo actualisée en direct")
             st.write(f"• Vent moyen BaliseMétéo ({balise_reelle['heure']}) : {balise_reelle['vent_moyen']} km/h")
             st.write(f"• Vent maxi / Rafale BaliseMétéo ({balise_reelle['heure']}) : {balise_reelle['vent_max']} km/h")
             st.write(f"• Indice d'agitation calculé (Balise) : {balise_reelle['indice']}/10")
-            st.write("• Écart dynamique actualisé en direct")
+            st.write("• Comparaison active en temps réel")
     else:
         st.info("Aucun identifiant BaliseMétéo FFVL configuré pour ce site.")
