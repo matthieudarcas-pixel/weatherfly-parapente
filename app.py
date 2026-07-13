@@ -1,44 +1,43 @@
 def recuperer_donnees_balise_reelles(balise_id):
     url = f"https://www.balisemeteo.com/balise.php?idBalise={balise_id}"
-    # Valeurs par défaut cohérentes en cas de coupure complète du serveur
+    # Valeurs de secours par défaut si le site est inaccessible
     fallback = {"heure": "09:40", "vent_moyen": 6.0, "vent_max": 9.0, "indice": 1}
     try:
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req, timeout=10) as response:
             html_content = response.read().decode('utf-8')
             
-            # 1. Extraction propre de l'heure
+            # 1. Extraction de l'heure du relevé
             match_heure = re.search(r"Relevé du \d{2}/\d{2}/\d{4} - (\d{2}:\d{2})", html_content)
-            heure_reelle = match_heure.group(1) if match_heure else datetime.now().strftime("%H:%M")
+            heure_reelle = match_heure.group(1) if match_heure else "09:40"
             
-            # 2. Extraction brute de TOUTES les valeurs numériques suivies de km/h
-            chiffres_bruts = re.findall(r"([\d\.,]+)\s*(?:km/h|Kmh|KM/H)", html_content, re.IGNORECASE)
+            # 2. Ciblage chirurgical par mot-clé pour éviter tout décalage d'index
+            # On cherche directement le nombre écrit juste après "Vent moyen" et "Vent maxi"
+            match_moyen = re.search(r"Vent moyen\s*:\s*([\d\.,]+)", html_content, re.IGNORECASE)
+            match_maxi = re.search(r"Vent maxi\s*:\s*([\d\.,]+)", html_content, re.IGNORECASE)
             
-            valeurs = []
-            for v in chiffres_bruts:
-                cleaned = v.replace(',', '.')
-                try:
-                    valeurs.append(float(cleaned))
-                except ValueError:
-                    pass
-            
-            # 3. Attribution robuste basée sur l'ordre strict du tableau FFVL (Moyen, Mini, Maxi)
-            # Même si le mini (valeurs[1]) vaut 0.0, cela n'impacte plus le Moyen (index 0) et le Maxi (index 2)
-            if len(valeurs) >= 3:
-                vent_moyen = valeurs[0]
-                vent_max = valeurs[2]
-            elif len(valeurs) == 2:
-                vent_moyen = valeurs[0]
-                vent_max = valeurs[1]
+            if match_moyen and match_maxi:
+                vent_moyen = float(match_moyen.group(1).replace(',', '.'))
+                vent_max = float(match_maxi.group(1).replace(',', '.'))
             else:
-                return fallback
+                # Système B : Si le site a retiré les labels textuels, on se rabat sur les 3 premières vitesses
+                chiffres_bruts = re.findall(r"([\d\.,]+)\s*(?:km/h|Kmh)", html_content, re.IGNORECASE)
+                valeurs = [float(v.replace(',', '.')) for v in chiffres_bruts if v.replace(',', '.').replace('.', '', 1).isdigit()]
+                
+                if len(valeurs) >= 3:
+                    vent_moyen = valeurs[0]
+                    vent_max = valeurs[2] # Le mini à l'index 1 est ignoré, qu'il soit à 0 ou non
+                elif len(valeurs) == 2:
+                    vent_moyen = valeurs[0]
+                    vent_max = valeurs[1]
+                else:
+                    return fallback
 
-            # 4. Sécurité : On ne bloque QUE si Moyen ET Max valent strictement 0 (ce qui signifierait une panne capteur/site)
+            # 3. Sécurité : si le moyen et le max sont à 0 (balise en panne), on applique le fallback
             if vent_moyen == 0.0 and vent_max == 0.0:
-                # Si le site répond mais affiche 0 partout (panne), on applique le fallback pour ne pas freezer l'UI
                 return fallback
 
-            # Calcul de l'indice de l'agitation à l'instant T
+            # 4. Calcul de l'indice d'agitation
             delta_rafale = max(0.0, vent_max - vent_moyen)
             indice = min(10, round((delta_rafale / 3) + (vent_moyen / 5)))
             
@@ -49,4 +48,5 @@ def recuperer_donnees_balise_reelles(balise_id):
                 "indice": max(1, indice)
             }
     except Exception:
+        # En cas de plantage réseau ou d'erreur, le fallback empêche la page blanche
         return fallback
