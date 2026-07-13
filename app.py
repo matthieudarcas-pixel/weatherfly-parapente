@@ -108,7 +108,6 @@ def recuperer_vraie_meteo(lat, lon, date_str):
     except Exception:
         return {}
 
-# --- 4. FONCTION DE RECHERCHE BALISE REELLE ---
 def recuperer_donnees_balise_reelles(balise_id):
     url = f"https://www.balisemeteo.com/balise.php?idBalise={balise_id}"
     fallback = {
@@ -120,15 +119,12 @@ def recuperer_donnees_balise_reelles(balise_id):
         with urllib.request.urlopen(req, timeout=4) as response:
             html_raw = response.read().decode('utf-8')
             
-            # Nettoyage du HTML pour travailler sur du texte brut standardisé
             text_clean = re.sub(r'<[^>]*>', ' ', html_raw)
             text_clean = re.sub(r'\s+', ' ', text_clean)
             
-            # Extraction heure
             match_heure = re.search(r"Relevé du \d{2}/\d{2}/\d{4} - (\d{2}:\d{2})", text_clean)
             heure_reelle = match_heure.group(1) if match_heure else "09:40"
             
-            # Extraction Vent Moyen
             dir_moyen = "NC"
             vent_moyen = 5.0
             match_moyen = re.search(r"Vent moyen Direction\s*:\s*(.+?)\s*Vitesse\s*:\s*([\d\.,]+)", text_clean, re.IGNORECASE)
@@ -136,7 +132,6 @@ def recuperer_donnees_balise_reelles(balise_id):
                 dir_moyen = match_moyen.group(1).strip()
                 vent_moyen = float(match_moyen.group(2).replace(',', '.'))
                 
-            # Extraction Vent Maxi
             dir_max = "NC"
             vent_max = vent_moyen + 3.0
             match_maxi = re.search(r"Vent maxi Direction\s*:\s*(.+?)\s*Vitesse\s*:\s*([\d\.,]+)", text_clean, re.IGNORECASE)
@@ -165,8 +160,33 @@ if "refresh_counter" not in st.session_state:
 col_gauche, col_droite = st.columns([3, 2])
 
 with col_gauche:
-    st.subheader("Configuration Pilote & Spot")
+    # --- MODIF : SÉPARATION DU PROFIL PILOTE ---
+    st.subheader("👤 1. Profil & Autonomie du Pilote")
+    ploufs = st.number_input("Expérience (Nombre de ploufs) :", min_value=0, max_value=1000, value=15)
     
+    col_chk1, col_chk2 = st.columns(2)
+    with col_chk1: m_oreilles = st.checkbox("Maitrise des Grandes Oreilles")
+    with col_chk2: m_face = st.checkbox("Maitrise du Gonflage Face Voile (>15km/h)")
+    
+    # Calcul de la Note Pilote (Base d'expérience + bonus techniques)
+    note_pilote_brute = 1
+    if ploufs < 10: note_pilote_brute = 2
+    elif ploufs < 20: note_pilote_brute = 4
+    elif ploufs <= 40: note_pilote_brute = 6
+    elif ploufs <= 100: note_pilote_brute = 8
+    else: note_pilote_brute = 10
+    
+    # Bonus malus techniques impactant sa note d'autonomie réelle
+    if m_oreilles: note_pilote_brute += 1
+    if m_face: note_pilote_brute += 1
+    note_pilote = min(10, max(1, note_pilote_brute))
+    
+    st.info(f"📊 **Note d'autonomie pilote estimée :** {note_pilote} / 10")
+    
+    st.markdown("---")
+    
+    # --- MODIF : SÉPARATION DU SPOT & DATE ---
+    st.subheader("🧭 2. Localisation du Spot & Date")
     region_selectionnee = st.selectbox("Région :", list(SPOTS_HIERARCHIE.keys()))
     dept_selectionne = st.selectbox("Département :", list(SPOTS_HIERARCHIE[region_selectionnee].keys()))
     spot_name = st.selectbox("Site officiel :", list(SPOTS_HIERARCHIE[region_selectionnee][dept_selectionne].keys()))
@@ -175,15 +195,12 @@ with col_gauche:
     
     dates_possibles = [(datetime.now() + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(15)]
     date_selectionnee = st.selectbox("Date du vol :", dates_possibles)
-    ploufs = st.number_input("Expérience (Nb de ploufs) :", min_value=0, max_value=1000, value=15)
     
-    col_chk1, col_chk2 = st.columns(2)
-    with col_chk1: m_oreilles = st.checkbox("Oreilles")
-    with col_chk2: m_face = st.checkbox("Face voile (>15km/h)")
-        
+    st.markdown("---")
     analyser_clic = st.button("RECHERCHER ET ANALYSER", type="primary")
-    st.subheader("Verdict Météo & Aérologie")
     
+    # --- BLOC VERROUILLÉ : VERDICT ---
+    st.subheader("Verdict Météo & Aérologie")
     indice_preve_actuel = 1
     
     if analyser_clic:
@@ -275,6 +292,7 @@ with col_gauche:
             st.warning("Impossible de récupérer les prévisions Open-Meteo.")
 
 with col_droite:
+    # --- BLOC VERROUILLÉ : RÈGLES ---
     st.subheader("Règles de Sécurité Intégrales")
     st.markdown("""
     *   **Niveau Débutant (< 20 ploufs) :** Max **15 km/h** | Agitation max **6/10**. Le thermique fort est à proscrire.
@@ -284,17 +302,17 @@ with col_droite:
     *   **Règle des Oreilles :** Interdiction de voler si l'indice d'agitation prévu atteint **8/10** sans maîtrise validée de la technique de descente rapide.
     """)
     
+    # --- BLOC VERROUILLÉ : SPÉ SPOT ---
     st.markdown("---")
     st.subheader("📌 Spécificités du Spot")
     st.write(spot_config["conseil_site"])
     st.write(f"• **Orientations Déco acceptées :** {', '.join(spot_config['deco'])}")
     
+    # --- BLOC VERROUILLÉ : RELEVÉ RÉEL BALISE ---
     ffvl_id = spot_config.get("balise_ffvl_id")
     if ffvl_id:
         st.markdown("---")
         st.subheader("📡 Relevé Réel BaliseMétéo")
-        
-        # [MODIF 1] Restauration du lien direct vers la balise sans rien supprimer
         st.markdown(f"[Accéder à la page de la balise FFVL n°{ffvl_id}](https://www.balisemeteo.com/balise.php?idBalise={ffvl_id})")
         
         if st.button("🔄 Rafraîchir la balise", key="refresh_balise"):
@@ -308,7 +326,6 @@ with col_droite:
         st.write(f"• **Indice d'agitation réel :** {balise_reelle['indice']}/10")
         
         if 'hourly_data' in locals() and hourly_data:
-            # [MODIF 2] Calcul de l'écart brut en points d'indice à la place du pourcentage
             diff_indice = balise_reelle['indice'] - indice_preve_actuel
             
             if diff_indice > 0:
