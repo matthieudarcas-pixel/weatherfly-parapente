@@ -48,7 +48,7 @@ COMPASS_ANGLES = {"N": 0, "NE": 45, "E": 90, "SE": 135, "S": 180, "SO": 225, "O"
 def get_vols_comment(v):
     if v <= 15: return "(Vol guidé en école requis, début de l'apprentissage)"
     if v <= 35: return "(Phase d'autonomie initiale en conditions calmes)"
-    if v <= 65: return "(Progression vers le brevet initial, ouverture aux premiers thermiques)"
+    if v <= 50: return "(Progression vers le brevet initial, ouverture aux premiers thermiques)"
     if v <= 100: return "(Pilote de site vu régulièrement, gestion des brises classiques)"
     if v <= 199: return "(Expérience solide, autonomie sur la majorité des sites connus)"
     return "(Volume de maturité : Expérience suffisante pour aborder tout type de site en sécurité)"
@@ -179,8 +179,12 @@ with col_gauche:
     # --- PROFIL PILOTE ---
     st.subheader("👤 1. Calculateur de Niveau Pilote")
     
-    # Nouvelle formule d'expérience : 100% du score (3 pts) atteint dès 200 vols
-    vols = st.slider("Volume de vols cumulés :", min_value=0, max_value=500, value=10, step=5)
+    # Curseur adaptatif : pas de 1 unité de 0 à 50, puis pas de 5 unités jusqu'à 200+
+    if st.session_state.get("vols_cumuls", 10) <= 50:
+        vols = st.slider("Volume de vols cumulés :", min_value=0, max_value=200, value=10, step=1, key="vols_cumuls")
+    else:
+        vols = st.slider("Volume de vols cumulés :", min_value=0, max_value=200, value=st.session_state.vols_cumuls, step=5, key="vols_cumuls")
+        
     st.caption(get_vols_comment(vols))
     
     notes_competences = []
@@ -226,7 +230,7 @@ with col_gauche:
         st.caption(get_skill_comment(c16))
         notes_competences.extend([c13, c14, c15, c16])
 
-    # Calcul algorithmique ajusté : vols à 100% dès 200 vols
+    # Calcul algorithmique ajusté : vols à 100% dès 200 vols (score max = 3.0 pts)
     avg_skills = sum(notes_competences) / len(notes_competences)
     vols_score = min(3.0, (vols / 200) * 3)
     
@@ -236,7 +240,7 @@ with col_gauche:
     final_score = min(10.0, final_score)
     note_pilote = max(1, round(final_score))
 
-    # Application du nouveau classement plafonné
+    # Application du nouveau classement centré sur l'autonomie de sécurité
     if final_score < 0.5:
         rank = "Grand Débutant"
     elif final_score < 3.0:
