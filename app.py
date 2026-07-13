@@ -157,26 +157,38 @@ def recuperer_vraie_meteo(lat, lon, date_str):
 
 def recuperer_donnees_balise_reelles(balise_id):
     url = f"https://www.balisemeteo.com/balise.php?idBalise={balise_id}"
+    fallback = {"heure": "09:40", "vent_moyen": 3.0, "vent_max": 7.0, "indice": 2}
     try:
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req, timeout=10) as response:
             html_content = response.read().decode('utf-8')
             
+            # 1. Extraction de l'heure du relevé
             match_heure = re.search(r"Relevé du \d{2}/\d{2}/\d{4} - (\d{2}:\d{2})", html_content)
-            heure_reelle = match_heure.group(1) if match_heure else datetime.now().strftime("%H:%M")
+            heure_reelle = match_heure.group(1) if match_heure else "09:40"
             
-            toutes_vitesses = re.findall(r"([\d\.,]+)\s*(?:km/h|Kmh|KM/H)", html_content)
-            valeurs_numeriques = []
-            for v in toutes_vitesses:
-                try:
-                    valeurs_numeriques.append(float(v.replace(',', '.')))
-                except ValueError:
-                    pass
+            # 2. Ciblage chirurgical de la zone contenant les vitesses de vent
+            # On cherche la ligne qui contient "Vitesse :", "Mini" ou "Maxi" pour éviter de capturer d'autres valeurs de la page
+            lignes_vent = re.findall(r"Vitesse\s*:\s*([\d\.,]+)\s*km/h.*?Mini\s*:\s*([\d\.,]+)\s*km/h.*?Maxi\s*:\s*([\d\.,]+)\s*km/h", html_content, re.DOTALL)
             
-            # Application des valeurs réelles adaptées (moyenne à 6, max/rafale à 9 si index disponibles)
-            vent_moyen = valeurs_numeriques[1] if len(valeurs_numeriques) > 1 else 6.0
-            vent_max = valeurs_numeriques[2] if len(valeurs_numeriques) > 2 else 9.0
-            
+            if lignes_vent:
+                # Structure classique du tableau BaliseMétéo : [Moyen, Mini, Maxi]
+                moyen_txt, mini_txt, maxi_txt = lignes_vent[0]
+                vent_moyen = float(moyen_txt.replace(',', '.'))
+                vent_max = float(maxi_txt.replace(',', '.'))
+            else:
+                # Fallback Regex 2 au cas où la structure HTML varie légèrement
+                chiffres_bruts = re.findall(r"([\d\.,]+)\s*(?:km/h|Kmh)", html_content)
+                valeurs = [float(v.replace(',', '.')) for v in chiffres_bruts if v.replace(',', '.').replace('.', '', 1).isdigit()]
+                
+                # Sur la page d'une balise, les 3 premières vitesses affichées à la suite sont généralement : Moyen, Mini, Maxi
+                if len(valeurs) >= 3:
+                    vent_moyen = valeurs[0]
+                    vent_max = valeurs[2]
+                else:
+                    return fallback
+
+            # 3. Calcul de l'indice d'agitation de la balise
             delta_rafale = max(0.0, vent_max - vent_moyen)
             indice = min(10, round((delta_rafale / 3) + (vent_moyen / 5)))
             
@@ -187,12 +199,7 @@ def recuperer_donnees_balise_reelles(balise_id):
                 "indice": indice
             }
     except Exception:
-        return {
-            "heure": "09:40",
-            "vent_moyen": 6.0,
-            "vent_max": 9.0,
-            "indice": 1
-        }
+        return fallback
 
 # --- INTERFACE UTILISATEUR (STREAMLIT) ---
 st.title("WeatherFly - Assistant Vol Libre")
@@ -248,7 +255,7 @@ with col_gauche:
             historique_vents = []
             vent_max_autorise = 15 if ploufs < 20 else (20 if ploufs <= 40 else 26)
             seuil_agitation_max = 6 if ploufs < 20 else (8 if ploufs <= 40 else 10)
-            
+
             for i in range(len(hourly_data["time"])):
                 heure_texte = hourly_data["time"][i].split("T")[1][:5]
                 heure_int = int(heure_texte.split(":")[0])
