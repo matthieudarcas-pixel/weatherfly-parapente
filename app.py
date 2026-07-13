@@ -160,7 +160,7 @@ if "refresh_counter" not in st.session_state:
 col_gauche, col_droite = st.columns([3, 2])
 
 with col_gauche:
-    # --- MODIF : SÉPARATION DU PROFIL PILOTE ---
+    # --- PROFIL PILOTE ---
     st.subheader("👤 1. Profil & Autonomie du Pilote")
     ploufs = st.number_input("Expérience (Nombre de ploufs) :", min_value=0, max_value=1000, value=15)
     
@@ -168,7 +168,7 @@ with col_gauche:
     with col_chk1: m_oreilles = st.checkbox("Maitrise des Grandes Oreilles")
     with col_chk2: m_face = st.checkbox("Maitrise du Gonflage Face Voile (>15km/h)")
     
-    # Calcul de la Note Pilote (Base d'expérience + bonus techniques)
+    # Calcul Note Pilote
     note_pilote_brute = 1
     if ploufs < 10: note_pilote_brute = 2
     elif ploufs < 20: note_pilote_brute = 4
@@ -176,7 +176,6 @@ with col_gauche:
     elif ploufs <= 100: note_pilote_brute = 8
     else: note_pilote_brute = 10
     
-    # Bonus malus techniques impactant sa note d'autonomie réelle
     if m_oreilles: note_pilote_brute += 1
     if m_face: note_pilote_brute += 1
     note_pilote = min(10, max(1, note_pilote_brute))
@@ -185,7 +184,7 @@ with col_gauche:
     
     st.markdown("---")
     
-    # --- MODIF : SÉPARATION DU SPOT & DATE ---
+    # --- SPOT & DATE ---
     st.subheader("🧭 2. Localisation du Spot & Date")
     region_selectionnee = st.selectbox("Région :", list(SPOTS_HIERARCHIE.keys()))
     dept_selectionne = st.selectbox("Département :", list(SPOTS_HIERARCHIE[region_selectionnee].keys()))
@@ -199,7 +198,7 @@ with col_gauche:
     st.markdown("---")
     analyser_clic = st.button("RECHERCHER ET ANALYSER", type="primary")
     
-    # --- BLOC VERROUILLÉ : VERDICT ---
+    # --- BLOC ENVELOPPÉ : VERDICT MÉTÉO ---
     st.subheader("Verdict Météo & Aérologie")
     indice_preve_actuel = 1
     
@@ -277,6 +276,7 @@ with col_gauche:
                     heures_valides_int.append(heure_int)
                     data_par_heure[heure_int] = {"vitesse": vitesse, "indice": indice_agitation}
 
+            # Affichage du Verdict Météo
             liste_fenetres = formater_fenetres(heures_valides_int, data_par_heure)
             if liste_fenetres:
                 st.success("🟢 FEU VERT POUR LE VOL")
