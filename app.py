@@ -301,6 +301,12 @@ with col_droite:
     - **Face voile :** Requis dès que le vent dépasse 15 km/h au décollage pour garantir la sécurité et le contrôle de l'aile.
     """)
     
+    st.markdown("---")
+    st.subheader("📌 Spécificités du site")
+    st.write(spot_config["conseil_site"])
+    st.write(f"• **Orientation déco :** {', '.join(spot_config['deco'])}")
+    st.write(f"• **Interdiction vent de Sud :** {'Oui' if spot_config['interdit_sud'] else 'Non'}")
+    
     ffvl_id = spot_config.get("balise_ffvl_id")
     if ffvl_id:
         st.markdown("---")
