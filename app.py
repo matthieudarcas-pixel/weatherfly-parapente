@@ -501,7 +501,6 @@ with col_gauche:
                 if heure_bloquee:
                     historique_vents.append(f"• {heure_texte} ({meteo_heure}) : {cause_heure}")
                 else:
-                    historique_vents.append(f"• {heure_texte} ({meteo_heure}) : ✅ Volable")
                     heures_valides_int.append(heure_int)
                     data_par_heure[heure_int] = {"vitesse": vitesse, "indice": indice_agitation}
 
@@ -516,7 +515,7 @@ with col_gauche:
                 for cause in facteurs_limitants: st.write(f"• {cause}")
 
             if historique_vents:
-                st.markdown("**Détail de la journée :**")
+                st.markdown("**Détail des heures bloquées :**")
                 for h_hist in historique_vents: st.write(h_hist)
         else:
             st.warning("Impossible de récupérer les prévisions Open-Meteo.")
