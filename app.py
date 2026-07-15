@@ -97,9 +97,6 @@ def charger_base_spots(contenu_xlsx, _cle_cache):
     if manquantes:
         raise ValueError(f"Colonnes manquantes dans le fichier Excel : {', '.join(manquantes)}")
 
-    # Colonne optionnelle des vents défavorables : détectée par son nom, où qu'elle soit
-    col_defavorable = next((nom for nom in col if re.search(r"d[ée]favorable", nom, re.IGNORECASE)), None)
-
     def val(ligne, nom):
         i = col.get(nom)
         return ligne[i] if i is not None and i < len(ligne) else None
@@ -127,7 +124,6 @@ def charger_base_spots(contenu_xlsx, _cle_cache):
         deco = parser_orientations(val(ligne, "Vent idéal"))
         deco_possible = [d for d in parser_orientations(val(ligne, "Vent possible")) if d not in deco]
         orientations_connues = bool(deco or deco_possible)
-        vents_defavorables = parser_orientations(val(ligne, col_defavorable)) if col_defavorable else []
 
         conseils = []
         for etiquette, colonne in [("Météo & pièges", "Météo & pièges"),
@@ -151,7 +147,6 @@ def charger_base_spots(contenu_xlsx, _cle_cache):
             "lat": float(lat), "lon": float(lon),
             "deco": deco, "deco_possible": deco_possible,
             "orientations_connues": orientations_connues,
-            "vents_defavorables": vents_defavorables,
             "balise_ffvl_id": str(val(ligne, "N°") or "").strip(),
             "balise_nom": str(val(ligne, "Balise") or "").strip(),
             "balise_statut": str(val(ligne, "Statut") or "").strip(),
@@ -211,19 +206,6 @@ def convertir_degres_en_direction(degres):
     if 202.5 <= degres < 247.5: return "SO"
     if 247.5 <= degres < 292.5: return "O"
     return "NO"
-
-def valider_axe_vent(direction_vent, orientations_deco):
-    if isinstance(orientations_deco, str):
-        orientations_deco = [orientations_deco]
-    if direction_vent not in COMPASS_ANGLES: return False
-    angle_vent = COMPASS_ANGLES[direction_vent]
-    for d_deco in orientations_deco:
-        if d_deco in COMPASS_ANGLES:
-            angle_deco = COMPASS_ANGLES[d_deco]
-            ecart = abs(angle_vent - angle_deco)
-            if ecart > 180: ecart = 360 - ecart
-            if ecart <= 45: return True
-    return False
 
 def formater_fenetres(heures_valides, data_par_heure):
     if not heures_valides: return []
@@ -491,11 +473,7 @@ with col_gauche:
                     historique_vents.append(f"• {heure_texte} ({meteo_heure}) : {cause_heure}")
                     continue
 
-                if spot_config["vents_defavorables"] and vitesse > 5 and valider_axe_vent(direction, spot_config["vents_defavorables"]):
-                    cause_heure = f"⚠️ Vent défavorable ({direction})"
-                    facteurs_limitants.add(f"⚠️ Vent défavorable pour ce site ({direction} : à ±45° d'un secteur signalé dangereux)")
-                    heure_bloquee = True
-                elif pluie > 0.1:
+                if pluie > 0.1:
                     cause_heure = f"🌧️ Pluie ({pluie} mm)"
                     facteurs_limitants.add("🌧️ Risque de précipitations")
                     heure_bloquee = True
@@ -507,9 +485,9 @@ with col_gauche:
                     cause_heure = f"🛑 Face voile requis ({vitesse} km/h)"
                     facteurs_limitants.add("🛑 Gonflage face voile insuffisant (Requis dès 15 km/h)")
                     heure_bloquee = True
-                elif vitesse > 5 and spot_config["orientations_connues"] and not valider_axe_vent(direction, axes_acceptes):
-                    cause_heure = f"🧭 Vent de travers/arrière ({direction})"
-                    facteurs_limitants.add(f"🧭 Alignement déco défavorable (Vent de travers/arrière : {direction})")
+                elif vitesse > 5 and spot_config["orientations_connues"] and direction not in axes_acceptes:
+                    cause_heure = f"🧭 Vent travers/cul ({direction})"
+                    facteurs_limitants.add(f"🧭 Vent travers/cul ({direction}) : hors des vents optimaux et favorables du site")
                     heure_bloquee = True
 
                 if heure_bloquee:
@@ -553,8 +531,6 @@ with col_droite:
         st.write(f"• **Vents optimaux :** {', '.join(spot_config['deco'])}")
     if spot_config["deco_possible"]:
         st.write(f"• **Vents favorables :** {', '.join(spot_config['deco_possible'])}")
-    if spot_config["vents_defavorables"]:
-        st.write(f"• ⚠️ **Vents défavorables (bloqués à ±45°) :** {', '.join(spot_config['vents_defavorables'])}")
     if not spot_config["orientations_connues"]:
         st.write("• **Vents :** orientations non renseignées dans la base ⚠️")
 
