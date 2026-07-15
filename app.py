@@ -2,47 +2,175 @@ import streamlit as st
 import urllib.request
 import json
 import re
+import io
+from pathlib import Path
 from datetime import datetime, timedelta
+
+import openpyxl
 
 # --- 1. CONFIGURATION INITIALE DE LA PAGE ---
 st.set_page_config(page_title="WeatherFly - Assistant Vol Libre", layout="wide")
 
-# --- 2. BASE DE DONNÉES SITES ---
-SPOTS_HIERARCHIE = {
-    "Occitanie": {
-        "09 - Ariège": {
-            "Port de Lers": {
-                "lat": 42.8036, "lon": 1.3711, "deco": ["NO"], "interdit_sud": True,
-                "balise_ffvl_id": "2327",
-                "conseil_site": "⚠️ Le Port de Lers peut forcir très vite en thermique. Reste vigilant aux cycles. Sensible au vent de Sud > 10 km/h (DANGER)."
-            },
-            "St Girons Moulis": {
-                "lat": 43.0709, "lon": 1.1746, "deco": ["N"], "interdit_sud": False,
-                "balise_ffvl_id": "121",
-                "conseil_site": "Brise de vallée classique. Attention au vent météo d'Ouest qui peut culer au déco."
-            },
-            "Prat d'Albis - Déco": {
-                "lat": 42.9217, "lon": 1.5811, "deco": ["NO", "N"], "interdit_sud": False,
-                "balise_ffvl_id": "2414",
-                "conseil_site": "Site thermique majeur dominant Foix. Attention au sud et aux brises fortes de fin de journée."
-            },
-            "Col de la Core": {
-                "lat": 42.8833, "lon": 1.2167, "deco": ["O"], "interdit_sud": False,
-                "balise_ffvl_id": "175",
-                "conseil_site": "Idéal pour le soaring par brise de pente. Attention aux conditions de transition."
-            }
-        },
-        "31 - Haute-Garonne": {
-            "Arbas / Le Cornudère": {
-                "lat": 42.9667, "lon": 0.9167, "deco": ["NE"], "interdit_sud": True,
-                "balise_ffvl_id": "",
-                "conseil_site": "Décollage soutenu en sous-bois, site à fort potentiel thermique. Éviter par Ouest/Nord-Ouest fort."
-            }
-        }
-    }
-}
+# --- 2. CHARGEMENT DE LA BASE DE DONNÉES SITES (EXCEL FFVL) ---
+# Le fichier Excel doit être posé à côté de ce script.
+# Colonnes attendues (feuille "Balises") : celles du fichier Balises_meteo_FFVL.xlsx
+CHEMIN_EXCEL = Path(__file__).parent / "Balises_meteo_FFVL.xlsx"
+NOM_FEUILLE = "Balises"
 
+# Conversion des directions anglaises du fichier FFVL vers la notation française de l'appli
+EN_VERS_FR = {"N": "N", "NE": "NE", "E": "E", "SE": "SE", "S": "S", "SW": "SO", "W": "O", "NW": "NO"}
+
+# Le fichier FFVL utilise les anciennes régions (avant 2016) : conversion vers les régions actuelles
+ANCIENNES_VERS_NOUVELLES_REGIONS = {
+    "Alsace": "Grand Est",
+    "Lorraine": "Grand Est",
+    "Champagne-Ardenne": "Grand Est",
+    "Aquitaine": "Nouvelle-Aquitaine",
+    "Limousin": "Nouvelle-Aquitaine",
+    "Poitou Charente": "Nouvelle-Aquitaine",
+    "Auvergne": "Auvergne-Rhône-Alpes",
+    "Rhône-Alpes": "Auvergne-Rhône-Alpes",
+    "Basse Normandie": "Normandie",
+    "Haute Normandie": "Normandie",
+    "Bourgogne": "Bourgogne-Franche-Comté",
+    "Franche-Comté": "Bourgogne-Franche-Comté",
+    "Centre": "Centre-Val de Loire",
+    "Ile de France": "Île-de-France",
+    "Languedoc-Rousillon": "Occitanie",
+    "Midi Pyrénées": "Occitanie",
+    "Nord-Pas-De-Calais": "Hauts-de-France",
+    "Picardie": "Hauts-de-France",
+    "Paca": "Provence-Alpes-Côte d'Azur",
+    "Pays de Loire": "Pays de la Loire",
+    "Outre Mer": "Outre-Mer",
+}
 COMPASS_ANGLES = {"N": 0, "NE": 45, "E": 90, "SE": 135, "S": 180, "SO": 225, "O": 270, "NO": 315}
+SANS_SPOT = "aucun"  # les lignes "aucun à <5 km" sont ignorées
+
+
+def nettoyer_texte(txt):
+    """Nettoie les textes bruts du fichier FFVL (retours chariot Excel, balises HTML)."""
+    if not txt:
+        return ""
+    txt = str(txt).replace("_x000D_", " ")
+    txt = re.sub(r"<[^>]*>", " ", txt)
+    txt = re.sub(r"\s+", " ", txt)
+    return txt.strip()
+
+
+def parser_orientations(txt):
+    """Transforme 'N·NW·SW' (notation FFVL) en ['N', 'NO', 'SO'] (notation appli)."""
+    if not txt:
+        return []
+    orientations = []
+    for token in str(txt).replace(",", "·").split("·"):
+        token = token.strip().upper()
+        if token in EN_VERS_FR:
+            orientations.append(EN_VERS_FR[token])
+    return orientations
+
+
+@st.cache_data(show_spinner="Chargement de la base de balises FFVL...")
+def charger_base_spots(contenu_xlsx, _cle_cache):
+    """Lit le fichier Excel FFVL et construit la hiérarchie Région > Département > Spot.
+
+    Chaque spot est associé à sa meilleure balise : statut OK en priorité, puis la plus proche.
+    """
+    wb = openpyxl.load_workbook(io.BytesIO(contenu_xlsx), read_only=True, data_only=True)
+    if NOM_FEUILLE not in wb.sheetnames:
+        raise ValueError(f"Feuille '{NOM_FEUILLE}' introuvable dans le fichier Excel.")
+    ws = wb[NOM_FEUILLE]
+    lignes = ws.iter_rows(values_only=True)
+
+    entete = [str(c).strip() if c is not None else "" for c in next(lignes)]
+    col = {nom: i for i, nom in enumerate(entete)}
+
+    colonnes_requises = ["Région", "Département", "Dépt", "N°", "Balise", "Statut",
+                         "Lat", "Lon", "Spot le plus proche (<5 km)", "Dist. (km)",
+                         "Vent idéal", "Vent possible"]
+    manquantes = [c for c in colonnes_requises if c not in col]
+    if manquantes:
+        raise ValueError(f"Colonnes manquantes dans le fichier Excel : {', '.join(manquantes)}")
+
+    def val(ligne, nom):
+        i = col.get(nom)
+        return ligne[i] if i is not None and i < len(ligne) else None
+
+    hierarchie = {}
+    for ligne in lignes:
+        spot_brut = val(ligne, "Spot le plus proche (<5 km)")
+        if not spot_brut or SANS_SPOT in str(spot_brut).lower():
+            continue
+        region = str(val(ligne, "Région") or "").strip()
+        region = ANCIENNES_VERS_NOUVELLES_REGIONS.get(region, region)
+        dept_nom = str(val(ligne, "Département") or "").strip()
+        dept_code = str(val(ligne, "Dépt") or "").strip()
+        lat, lon = val(ligne, "Lat"), val(ligne, "Lon")
+        if not region or lat is None or lon is None:
+            continue
+
+        if dept_code.isdigit():
+            dept_code = dept_code.zfill(2)
+        dept_label = f"{dept_code} - {dept_nom}" if dept_code else dept_nom
+
+        spot_nom = str(spot_brut).strip()
+        spot_nom = spot_nom[0].upper() + spot_nom[1:]
+
+        deco = parser_orientations(val(ligne, "Vent idéal"))
+        deco_possible = [d for d in parser_orientations(val(ligne, "Vent possible")) if d not in deco]
+
+        # Danger vent de Sud déduit des orientations : site sans aucune composante Sud
+        orientations_connues = bool(deco or deco_possible)
+        interdit_sud = orientations_connues and not any(
+            d in ("S", "SE", "SO") for d in deco + deco_possible
+        )
+
+        conseils = []
+        for etiquette, colonne in [("Météo & pièges", "Météo & pièges"),
+                                   ("Règles / restrictions", "Règles / restrictions"),
+                                   ("Remarques", "Remarques")]:
+            texte = nettoyer_texte(val(ligne, colonne))
+            if texte:
+                conseils.append(f"**{etiquette} :** {texte}")
+
+        dist = val(ligne, "Dist. (km)")
+        candidat = {
+            "lat": float(lat), "lon": float(lon),
+            "deco": deco, "deco_possible": deco_possible,
+            "orientations_connues": orientations_connues,
+            "interdit_sud": interdit_sud,
+            "balise_ffvl_id": str(val(ligne, "N°") or "").strip(),
+            "balise_nom": str(val(ligne, "Balise") or "").strip(),
+            "balise_statut": str(val(ligne, "Statut") or "").strip(),
+            "dist_km": float(dist) if dist is not None else None,
+            "alt_deco": val(ligne, "Alt. déco (m)"),
+            "alt_atterro": val(ligne, "Alt. atterro (m)"),
+            "thermique": str(val(ligne, "Therm.") or "").strip().lower() == "oui",
+            "soaring": str(val(ligne, "Soar.") or "").strip().lower() == "oui",
+            "conseil_site": "  \n".join(conseils) if conseils else "Pas d'information spécifique pour ce site dans la base FFVL.",
+        }
+
+        existant = hierarchie.setdefault(region, {}).setdefault(dept_label, {}).get(spot_nom)
+        if existant is None or _est_meilleure_balise(candidat, existant):
+            hierarchie[region][dept_label][spot_nom] = candidat
+
+    # Tri alphabétique à tous les niveaux pour les menus déroulants
+    return {
+        region: {
+            dept: dict(sorted(spots.items()))
+            for dept, spots in sorted(depts.items())
+        }
+        for region, depts in sorted(hierarchie.items())
+    }
+
+
+def _est_meilleure_balise(candidat, existant):
+    """Une balise OK bat une balise en maintenance ; à statut égal, la plus proche gagne."""
+    def score(b):
+        return (0 if b["balise_statut"] == "OK" else 1,
+                b["dist_km"] if b["dist_km"] is not None else 9999)
+    return score(candidat) < score(existant)
+
 
 # --- 3. DICTIONNAIRES DE DÉCODAGE TEXTE DES CRITÈRES ---
 def get_vols_comment(v):
@@ -96,7 +224,7 @@ def formater_fenetres(heures_valides, data_par_heure):
             courant = [h]
         precedent = h
     blocs.append(courant)
-    
+
     resultats_txt = []
     for bloc in blocs:
         h_debut = bloc[0]
@@ -126,7 +254,7 @@ def recuperer_vraie_meteo(lat, lon, date_str):
 def recuperer_donnees_balise_reelles(balise_id):
     url = f"https://www.balisemeteo.com/balise.php?idBalise={balise_id}"
     fallback = {
-        "heure": "09:40", "vent_moyen": 5.0, "dir_moyen": "NC", 
+        "heure": "09:40", "vent_moyen": 5.0, "dir_moyen": "NC",
         "vent_max": 8.0, "dir_max": "NC", "indice": 1, "is_fallback": True
     }
     try:
@@ -135,17 +263,17 @@ def recuperer_donnees_balise_reelles(balise_id):
             html_raw = response.read().decode('utf-8')
             text_clean = re.sub(r'<[^>]*>', ' ', html_raw)
             text_clean = re.sub(r'\s+', ' ', text_clean)
-            
+
             match_heure = re.search(r"Relevé du \d{2}/\d{2}/\d{4} - (\d{2}:\d{2})", text_clean)
             heure_reelle = match_heure.group(1) if match_heure else "09:40"
-            
+
             dir_moyen = "NC"
             vent_moyen = 5.0
             match_moyen = re.search(r"Vent moyen Direction\s*:\s*(.+?)\s*Vitesse\s*:\s*([\d\.,]+)", text_clean, re.IGNORECASE)
             if match_moyen:
                 dir_moyen = match_moyen.group(1).strip()
                 vent_moyen = float(match_moyen.group(2).replace(',', '.'))
-                
+
             dir_max = "NC"
             vent_max = vent_moyen + 3.0
             match_maxi = re.search(r"Vent maxi Direction\s*:\s*(.+?)\s*Vitesse\s*:\s*([\d\.,]+)", text_clean, re.IGNORECASE)
@@ -155,11 +283,11 @@ def recuperer_donnees_balise_reelles(balise_id):
 
             delta_rafale = max(0.0, vent_max - vent_moyen)
             indice = min(10, round((delta_rafale / 3) + (vent_moyen / 5)))
-            
+
             return {
-                "heure": heure_reelle, 
+                "heure": heure_reelle,
                 "vent_moyen": vent_moyen, "dir_moyen": dir_moyen,
-                "vent_max": vent_max, "dir_max": dir_max, 
+                "vent_max": vent_max, "dir_max": dir_max,
                 "indice": max(1, indice), "is_fallback": False
             }
     except Exception:
@@ -173,20 +301,45 @@ if "refresh_counter" not in st.session_state:
 
 aujourd_hui_str = datetime.now().strftime("%Y-%m-%d")
 
+# Chargement de la base Excel : fichier local prioritaire, sinon upload manuel
+contenu_xlsx = None
+cle_cache = None
+if CHEMIN_EXCEL.exists():
+    contenu_xlsx = CHEMIN_EXCEL.read_bytes()
+    cle_cache = f"{CHEMIN_EXCEL}|{CHEMIN_EXCEL.stat().st_mtime}"
+else:
+    st.warning(f"Fichier '{CHEMIN_EXCEL.name}' introuvable à côté du script. Charge-le manuellement :")
+    fichier_upload = st.file_uploader("Base de balises FFVL (.xlsx)", type=["xlsx"])
+    if fichier_upload is not None:
+        contenu_xlsx = fichier_upload.getvalue()
+        cle_cache = f"upload|{fichier_upload.name}|{len(contenu_xlsx)}"
+
+if contenu_xlsx is None:
+    st.stop()
+
+try:
+    SPOTS_HIERARCHIE = charger_base_spots(contenu_xlsx, cle_cache)
+except Exception as e:
+    st.error(f"Impossible de lire la base de balises : {e}")
+    st.stop()
+
+nb_spots = sum(len(spots) for depts in SPOTS_HIERARCHIE.values() for spots in depts.values())
+st.caption(f"📚 Base FFVL chargée : {nb_spots} spots répartis sur {len(SPOTS_HIERARCHIE)} régions.")
+
 col_gauche, col_droite = st.columns([3, 2])
 
 with col_gauche:
     # --- PROFIL PILOTE ---
     st.subheader("👤 1. Calculateur de Niveau Pilote")
-    
+
     # Curseur adaptatif : pas de 1 unité de 0 à 50, puis pas de 5 unités jusqu'à 200+
     if st.session_state.get("vols_cumuls", 10) <= 50:
         vols = st.slider("Volume de vols cumulés :", min_value=0, max_value=200, value=10, step=1, key="vols_cumuls")
     else:
         vols = st.slider("Volume de vols cumulés :", min_value=0, max_value=200, value=st.session_state.vols_cumuls, step=5, key="vols_cumuls")
-        
+
     st.caption(get_vols_comment(vols))
-    
+
     notes_competences = []
 
     with st.expander("🪁 Techniques au Sol"):
@@ -233,7 +386,7 @@ with col_gauche:
     # Calcul algorithmique ajusté : vols à 100% dès 200 vols (score max = 3.0 pts)
     avg_skills = sum(notes_competences) / len(notes_competences)
     vols_score = min(3.0, (vols / 200) * 3)
-    
+
     final_score = (avg_skills * 0.7) + vols_score
     if vols <= 10 and avg_skills == 0:
         final_score = 0.0
@@ -253,47 +406,48 @@ with col_gauche:
         rank = "Autonome sur tout type de site en toute condition météo sans se mettre en danger"
 
     st.info(f"📊 **Statut :** {rank}  \n🎯 **Note finale calculée :** {final_score:.1f}/10 (Arrondie à : {note_pilote}/10)")
-    
+
     st.markdown("---")
-    
+
     # --- SPOT & DATE ---
     st.subheader("🧭 2. Localisation du Spot & Date")
     region_selectionnee = st.selectbox("Région :", list(SPOTS_HIERARCHIE.keys()))
     dept_selectionne = st.selectbox("Département :", list(SPOTS_HIERARCHIE[region_selectionnee].keys()))
     spot_name = st.selectbox("Site officiel :", list(SPOTS_HIERARCHIE[region_selectionnee][dept_selectionne].keys()))
-    
+
     spot_config = SPOTS_HIERARCHIE[region_selectionnee][dept_selectionne][spot_name]
-    
+
     dates_possibles = [(datetime.now() + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(15)]
     date_selectionnee = st.selectbox("Date du vol :", dates_possibles)
-    
+
     st.markdown("---")
     analyser_clic = st.button("RECHERCHER ET ANALYSER", type="primary")
-    
+
     # --- VERDICT METEO ---
     st.subheader("Verdict Météo & Aérologie")
     indice_preve_actuel = 1
-    
+
     if analyser_clic:
         with st.spinner("Interrogation des serveurs météo..."):
             hourly_data = recuperer_vraie_meteo(spot_config["lat"], spot_config["lon"], date_selectionnee)
-            
+
         if hourly_data and "time" in hourly_data:
             heures_valides_int = []
-            data_par_heure = {}  
+            data_par_heure = {}
             facteurs_limitants = set()
             historique_vents = []
-            
+
             vent_max_autorise = 15 if note_pilote <= 3 else (20 if note_pilote <= 6 else 26)
             seuil_agitation_max = 6 if note_pilote <= 3 else (8 if note_pilote <= 6 else 10)
-            
+
             heure_courante = datetime.now().hour
+            axes_acceptes = spot_config["deco"] + spot_config["deco_possible"]
 
             for i in range(len(hourly_data["time"])):
                 heure_texte = hourly_data["time"][i].split("T")[1][:5]
                 heure_int = int(heure_texte.split(":")[0])
                 if heure_int < 8 or heure_int > 21: continue
-                    
+
                 vitesse = round(hourly_data["wind_speed_10m"][i])
                 v_rafales = round(hourly_data["wind_gusts_10m"][i]) if "wind_gusts_10m" in hourly_data else vitesse
                 direction = convertir_degres_en_direction(hourly_data["wind_direction_10m"][i])
@@ -302,18 +456,18 @@ with col_gauche:
 
                 delta_rafale = max(0, v_rafales - vitesse)
                 indice_agitation = min(10, round((delta_rafale / 3) + (vitesse / 5) + (cape_val / 200)))
-                
+
                 if heure_int == heure_courante:
                     indice_preve_actuel = max(1, indice_agitation)
 
                 heure_bloquee = False
                 cause_heure = ""
-                
+
                 if indice_agitation > seuil_agitation_max:
                     cause_heure = f"☀️ Agitation thermique ({indice_agitation}/10)"
                     facteurs_limitants.add(f"☀️ Aérologie trop agitée ({indice_agitation}/10 > {seuil_agitation_max}/10)")
                     heure_bloquee = True
-                elif c9 < 5 and indice_agitation >= 8:  
+                elif c9 < 5 and indice_agitation >= 8:
                     cause_heure = f"🔥 Thermique marqué (Maîtrise incidents requise)"
                     facteurs_limitants.add("🔥 Pic thermique (Maîtrise des fermetures/incidents insuffisante)")
                     heure_bloquee = True
@@ -326,7 +480,7 @@ with col_gauche:
                     cause_heure = f"⚠️ Danger Sud ({vitesse} km/h)"
                     facteurs_limitants.add(f"⚠️ Danger Vent de Sud sur ce spot par vent > 10 km/h")
                     heure_bloquee = True
-                elif pluie > 0.1: 
+                elif pluie > 0.1:
                     cause_heure = f"🌧️ Pluie ({pluie} mm)"
                     facteurs_limitants.add("🌧️ Risque de précipitations")
                     heure_bloquee = True
@@ -334,11 +488,11 @@ with col_gauche:
                     cause_heure = f"💨 Trop fort ({vitesse} km/h)"
                     facteurs_limitants.add(f"💨 Vitesse du vent supérieure à ton maximum autorisé ({vent_max_autorise} km/h)")
                     heure_bloquee = True
-                elif vitesse > 15 and c2 < 5:  
+                elif vitesse > 15 and c2 < 5:
                     cause_heure = f"🛑 Face voile requis ({vitesse} km/h)"
                     facteurs_limitants.add("🛑 Gonflage face voile insuffisant (Requis dès 15 km/h)")
                     heure_bloquee = True
-                elif vitesse > 5 and not valider_axe_vent(direction, spot_config["deco"]):
+                elif vitesse > 5 and spot_config["orientations_connues"] and not valider_axe_vent(direction, axes_acceptes):
                     cause_heure = f"🧭 Vent de travers/arrière ({direction})"
                     facteurs_limitants.add(f"🧭 Alignement déco défavorable (Vent de travers/arrière : {direction})")
                     heure_bloquee = True
@@ -353,10 +507,12 @@ with col_gauche:
             if liste_fenetres:
                 st.success("🟢 FEU VERT POUR LE VOL")
                 for f in liste_fenetres: st.write(f)
+                if not spot_config["orientations_connues"]:
+                    st.warning("🧭 Orientations de décollage inconnues dans la base : l'axe du vent n'a PAS été contrôlé. Vérifie l'orientation du déco sur place.")
             else:
                 st.error("🛑 FEU ROUGE : RESTE AU SOL")
                 for cause in facteurs_limitants: st.write(f"• {cause}")
-                
+
             if historique_vents:
                 st.markdown("**Détail de la journée :**")
                 for h_hist in historique_vents: st.write(h_hist)
@@ -373,31 +529,61 @@ with col_droite:
     *   **Règle du Face Voile :** Niveau intermédiaire requis sur le curseur Sol (Note >= 5) si le vent moyen dépasse **15 km/h** pour assurer un décollage en sécurité.
     *   **Règle des Incidents :** Interdiction de voler si l'indice d'agitation prévu atteint **8/10** sans une note minimale de 5 en gestion des incidents (SIV/Fermetures).
     """)
-    
-    # --- BLOC VERROUILLÉ : SPÉ SPOT ---
+
+    # --- BLOC : SPÉCIFICITÉS DU SPOT (issues du fichier Excel FFVL) ---
     st.markdown("---")
     st.subheader("📌 Spécificités du Spot")
-    st.write(spot_config["conseil_site"])
-    st.write(f"• **Orientations Déco acceptées :** {', '.join(spot_config['deco'])}")
-    
-    # --- BLOC VERROUILLÉ : RELEVÉ RÉEL BALISE ---
+
+    if spot_config["deco"]:
+        st.write(f"• **Orientations Déco idéales :** {', '.join(spot_config['deco'])}")
+    if spot_config["deco_possible"]:
+        st.write(f"• **Orientations possibles (tolérées) :** {', '.join(spot_config['deco_possible'])}")
+    if not spot_config["orientations_connues"]:
+        st.write("• **Orientations Déco :** non renseignées dans la base ⚠️")
+    if spot_config["interdit_sud"]:
+        st.write("• ⚠️ **Site sans orientation Sud :** vent de secteur S/SE/SO > 10 km/h considéré comme dangereux.")
+
+    infos_alt = []
+    if spot_config["alt_deco"]: infos_alt.append(f"Déco {round(spot_config['alt_deco'])} m")
+    if spot_config["alt_atterro"]: infos_alt.append(f"Atterro {round(spot_config['alt_atterro'])} m")
+    if infos_alt:
+        st.write(f"• **Altitudes :** {' | '.join(infos_alt)}")
+
+    pratiques = []
+    if spot_config["thermique"]: pratiques.append("Thermique ☀️")
+    if spot_config["soaring"]: pratiques.append("Soaring 🌬️")
+    if pratiques:
+        st.write(f"• **Pratiques :** {', '.join(pratiques)}")
+
+    st.markdown(spot_config["conseil_site"])
+
+    # --- BLOC : RELEVÉ RÉEL BALISE ---
     ffvl_id = spot_config.get("balise_ffvl_id")
     if ffvl_id:
         st.markdown("---")
         st.subheader("📡 Relevé Réel BaliseMétéo")
+        detail_balise = f"Balise **{spot_config['balise_nom']}** (n°{ffvl_id})"
+        if spot_config["dist_km"] is not None:
+            detail_balise += f" — à {spot_config['dist_km']} km du spot"
+        st.write(detail_balise)
+        if spot_config["balise_statut"] != "OK":
+            st.warning(f"⚠️ Balise signalée « {spot_config['balise_statut']} » dans la base : le relevé en direct peut être indisponible ou faux.")
         st.markdown(f"[Accéder à la page de la balise FFVL n°{ffvl_id}](https://www.balisemeteo.com/balise.php?idBalise={ffvl_id})")
-        
+
         if date_selectionnee == aujourd_hui_str:
             if st.button("🔄 Rafraîchir la balise", key="refresh_balise"):
                 st.session_state.refresh_counter += 1
-            
+
             balise_reelle = recuperer_donnees_balise_reelles(ffvl_id)
-            
+
+            if balise_reelle.get("is_fallback"):
+                st.error("❌ Relevé en direct indisponible (les valeurs ci-dessous sont des valeurs par défaut, ne pas s'y fier).")
+
             st.write(f"• **Heure du relevé en direct :** {balise_reelle['heure']}")
             st.write(f"• **Vent moyen constaté :** {balise_reelle['vent_moyen']} km/h ({balise_reelle['dir_moyen']})")
             st.write(f"• **Vent max constaté :** {balise_reelle['vent_max']} km/h ({balise_reelle['dir_max']})")
             st.write(f"• **Indice d'agitation réel :** {balise_reelle['indice']}/10")
-            
+
             if 'hourly_data' in locals() and hourly_data:
                 diff_indice = balise_reelle['indice'] - indice_preve_actuel
                 if diff_indice > 0:
