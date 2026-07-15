@@ -59,14 +59,19 @@ def nettoyer_texte(txt):
 
 
 def parser_orientations(txt):
-    """Transforme 'N·NW·SW' (notation FFVL) en ['N', 'NO', 'SO'] (notation appli)."""
+    """Transforme 'N·NW·SW' (notation FFVL) en ['N', 'NO', 'SO'] (notation appli).
+
+    Accepte aussi la notation française (O, SO, NO) pour les colonnes remplies à la main.
+    """
     if not txt:
         return []
     orientations = []
-    for token in str(txt).replace(",", "·").split("·"):
+    for token in str(txt).replace(",", "·").replace(";", "·").split("·"):
         token = token.strip().upper()
         if token in EN_VERS_FR:
-            orientations.append(EN_VERS_FR[token])
+            token = EN_VERS_FR[token]
+        if token in COMPASS_ANGLES and token not in orientations:
+            orientations.append(token)
     return orientations
 
 
@@ -91,6 +96,9 @@ def charger_base_spots(contenu_xlsx, _cle_cache):
     manquantes = [c for c in colonnes_requises if c not in col]
     if manquantes:
         raise ValueError(f"Colonnes manquantes dans le fichier Excel : {', '.join(manquantes)}")
+
+    # Colonne optionnelle des vents défavorables : détectée par son nom, où qu'elle soit
+    col_defavorable = next((nom for nom in col if re.search(r"d[ée]favorable", nom, re.IGNORECASE)), None)
 
     def val(ligne, nom):
         i = col.get(nom)
@@ -119,6 +127,7 @@ def charger_base_spots(contenu_xlsx, _cle_cache):
         deco = parser_orientations(val(ligne, "Vent idéal"))
         deco_possible = [d for d in parser_orientations(val(ligne, "Vent possible")) if d not in deco]
         orientations_connues = bool(deco or deco_possible)
+        vents_defavorables = parser_orientations(val(ligne, col_defavorable)) if col_defavorable else []
 
         conseils = []
         for etiquette, colonne in [("Météo & pièges", "Météo & pièges"),
@@ -142,6 +151,7 @@ def charger_base_spots(contenu_xlsx, _cle_cache):
             "lat": float(lat), "lon": float(lon),
             "deco": deco, "deco_possible": deco_possible,
             "orientations_connues": orientations_connues,
+            "vents_defavorables": vents_defavorables,
             "balise_ffvl_id": str(val(ligne, "N°") or "").strip(),
             "balise_nom": str(val(ligne, "Balise") or "").strip(),
             "balise_statut": str(val(ligne, "Statut") or "").strip(),
@@ -481,7 +491,11 @@ with col_gauche:
                     historique_vents.append(f"• {heure_texte} ({meteo_heure}) : {cause_heure}")
                     continue
 
-                if pluie > 0.1:
+                if spot_config["vents_defavorables"] and vitesse > 5 and valider_axe_vent(direction, spot_config["vents_defavorables"]):
+                    cause_heure = f"⚠️ Vent défavorable ({direction})"
+                    facteurs_limitants.add(f"⚠️ Vent défavorable pour ce site ({direction} : à ±45° d'un secteur signalé dangereux)")
+                    heure_bloquee = True
+                elif pluie > 0.1:
                     cause_heure = f"🌧️ Pluie ({pluie} mm)"
                     facteurs_limitants.add("🌧️ Risque de précipitations")
                     heure_bloquee = True
@@ -539,6 +553,8 @@ with col_droite:
         st.write(f"• **Vents optimaux :** {', '.join(spot_config['deco'])}")
     if spot_config["deco_possible"]:
         st.write(f"• **Vents favorables :** {', '.join(spot_config['deco_possible'])}")
+    if spot_config["vents_defavorables"]:
+        st.write(f"• ⚠️ **Vents défavorables (bloqués à ±45°) :** {', '.join(spot_config['vents_defavorables'])}")
     if not spot_config["orientations_connues"]:
         st.write("• **Vents :** orientations non renseignées dans la base ⚠️")
 
