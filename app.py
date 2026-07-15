@@ -118,12 +118,7 @@ def charger_base_spots(contenu_xlsx, _cle_cache):
 
         deco = parser_orientations(val(ligne, "Vent idéal"))
         deco_possible = [d for d in parser_orientations(val(ligne, "Vent possible")) if d not in deco]
-
-        # Danger vent de Sud déduit des orientations : site sans aucune composante Sud
         orientations_connues = bool(deco or deco_possible)
-        interdit_sud = orientations_connues and not any(
-            d in ("S", "SE", "SO") for d in deco + deco_possible
-        )
 
         conseils = []
         for etiquette, colonne in [("Météo & pièges", "Météo & pièges"),
@@ -134,17 +129,26 @@ def charger_base_spots(contenu_xlsx, _cle_cache):
                 conseils.append(f"**{etiquette} :** {texte}")
 
         dist = val(ligne, "Dist. (km)")
+        alt_deco = val(ligne, "Alt. déco (m)")
+        alt_atterro = val(ligne, "Alt. atterro (m)")
+        # Dénivelé déco -> atterro : calculé depuis les altitudes, sinon colonne D+ du fichier
+        if alt_deco is not None and alt_atterro is not None:
+            denivele = round(alt_deco - alt_atterro)
+        else:
+            d_plus = val(ligne, "D+ (m)")
+            denivele = round(d_plus) if d_plus is not None else None
+
         candidat = {
             "lat": float(lat), "lon": float(lon),
             "deco": deco, "deco_possible": deco_possible,
             "orientations_connues": orientations_connues,
-            "interdit_sud": interdit_sud,
             "balise_ffvl_id": str(val(ligne, "N°") or "").strip(),
             "balise_nom": str(val(ligne, "Balise") or "").strip(),
             "balise_statut": str(val(ligne, "Statut") or "").strip(),
             "dist_km": float(dist) if dist is not None else None,
-            "alt_deco": val(ligne, "Alt. déco (m)"),
-            "alt_atterro": val(ligne, "Alt. atterro (m)"),
+            "alt_deco": alt_deco,
+            "alt_atterro": alt_atterro,
+            "denivele": denivele,
             "thermique": str(val(ligne, "Therm.") or "").strip().lower() == "oui",
             "soaring": str(val(ligne, "Soar.") or "").strip().lower() == "oui",
             "conseil_site": "  \n".join(conseils) if conseils else "Pas d'information spécifique pour ce site dans la base FFVL.",
@@ -476,11 +480,7 @@ with col_gauche:
                     historique_vents.append(f"• {heure_texte} : {cause_heure}")
                     continue
 
-                if spot_config["interdit_sud"] and direction in ["S", "SO", "SE"] and vitesse > 10:
-                    cause_heure = f"⚠️ Danger Sud ({vitesse} km/h)"
-                    facteurs_limitants.add(f"⚠️ Danger Vent de Sud sur ce spot par vent > 10 km/h")
-                    heure_bloquee = True
-                elif pluie > 0.1:
+                if pluie > 0.1:
                     cause_heure = f"🌧️ Pluie ({pluie} mm)"
                     facteurs_limitants.add("🌧️ Risque de précipitations")
                     heure_bloquee = True
@@ -535,17 +535,16 @@ with col_droite:
     st.subheader("📌 Spécificités du Spot")
 
     if spot_config["deco"]:
-        st.write(f"• **Orientations Déco idéales :** {', '.join(spot_config['deco'])}")
+        st.write(f"• **Vents optimaux :** {', '.join(spot_config['deco'])}")
     if spot_config["deco_possible"]:
-        st.write(f"• **Orientations possibles (tolérées) :** {', '.join(spot_config['deco_possible'])}")
+        st.write(f"• **Vents favorables :** {', '.join(spot_config['deco_possible'])}")
     if not spot_config["orientations_connues"]:
-        st.write("• **Orientations Déco :** non renseignées dans la base ⚠️")
-    if spot_config["interdit_sud"]:
-        st.write("• ⚠️ **Site sans orientation Sud :** vent de secteur S/SE/SO > 10 km/h considéré comme dangereux.")
+        st.write("• **Vents :** orientations non renseignées dans la base ⚠️")
 
     infos_alt = []
     if spot_config["alt_deco"]: infos_alt.append(f"Déco {round(spot_config['alt_deco'])} m")
     if spot_config["alt_atterro"]: infos_alt.append(f"Atterro {round(spot_config['alt_atterro'])} m")
+    if spot_config["denivele"]: infos_alt.append(f"Dénivelé {spot_config['denivele']} m")
     if infos_alt:
         st.write(f"• **Altitudes :** {' | '.join(infos_alt)}")
 
