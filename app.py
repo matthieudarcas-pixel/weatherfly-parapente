@@ -58,6 +58,15 @@ def nettoyer_texte(txt):
     return txt.strip()
 
 
+ROSE_DES_VENTS = ["N", "NE", "E", "SE", "S", "SO", "O", "NO"]
+
+
+def voisins_45_degres(direction):
+    """Renvoie les deux directions à ±45° d'une direction donnée (ex : S -> SE, SO)."""
+    idx = ROSE_DES_VENTS.index(direction)
+    return [ROSE_DES_VENTS[(idx - 1) % 8], ROSE_DES_VENTS[(idx + 1) % 8]]
+
+
 def parser_orientations(txt):
     """Transforme 'N·NW·SW' (notation FFVL) en ['N', 'NO', 'SO'] (notation appli).
 
@@ -122,7 +131,14 @@ def charger_base_spots(contenu_xlsx, _cle_cache):
         spot_nom = spot_nom[0].upper() + spot_nom[1:]
 
         deco = parser_orientations(val(ligne, "Vent idéal"))
-        deco_possible = [d for d in parser_orientations(val(ligne, "Vent possible")) if d not in deco]
+        # Vents favorables = colonne "Vent possible" + directions à ±45° des vents optimaux
+        favorables_bruts = parser_orientations(val(ligne, "Vent possible"))
+        for d_opt in deco:
+            favorables_bruts.extend(voisins_45_degres(d_opt))
+        deco_possible = []
+        for d in favorables_bruts:
+            if d not in deco and d not in deco_possible:
+                deco_possible.append(d)
         orientations_connues = bool(deco or deco_possible)
 
         conseils = []
