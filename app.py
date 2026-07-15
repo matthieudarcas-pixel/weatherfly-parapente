@@ -466,6 +466,7 @@ with col_gauche:
 
                 heure_bloquee = False
                 cause_heure = ""
+                meteo_heure = f"{direction}, {vitesse} km/h"
 
                 if indice_agitation > seuil_agitation_max:
                     cause_heure = f"☀️ Agitation thermique ({indice_agitation}/10)"
@@ -477,7 +478,7 @@ with col_gauche:
                     heure_bloquee = True
 
                 if heure_bloquee:
-                    historique_vents.append(f"• {heure_texte} : {cause_heure}")
+                    historique_vents.append(f"• {heure_texte} ({meteo_heure}) : {cause_heure}")
                     continue
 
                 if pluie > 0.1:
@@ -498,8 +499,9 @@ with col_gauche:
                     heure_bloquee = True
 
                 if heure_bloquee:
-                    historique_vents.append(f"• {heure_texte} : {cause_heure}")
+                    historique_vents.append(f"• {heure_texte} ({meteo_heure}) : {cause_heure}")
                 else:
+                    historique_vents.append(f"• {heure_texte} ({meteo_heure}) : ✅ Volable")
                     heures_valides_int.append(heure_int)
                     data_par_heure[heure_int] = {"vitesse": vitesse, "indice": indice_agitation}
 
