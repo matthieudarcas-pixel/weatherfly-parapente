@@ -8,8 +8,55 @@ from datetime import datetime, timedelta
 
 import openpyxl
 
+try:
+    from streamlit_js_eval import streamlit_js_eval
+    STOCKAGE_NAVIGATEUR_DISPO = True
+except ImportError:
+    STOCKAGE_NAVIGATEUR_DISPO = False
+
 # --- 1. CONFIGURATION INITIALE DE LA PAGE ---
 st.set_page_config(page_title="WeatherFly - Assistant Vol Libre", layout="wide")
+
+# --- 1bis. PROFIL UTILISATEUR MÉMORISÉ DANS LE NAVIGATEUR (localStorage) ---
+# Le spot et les compétences pilote sont sauvegardés dans le navigateur de chaque
+# utilisateur et restaurés automatiquement à la connexion suivante.
+CLES_PROFIL = ["vols_cumuls"] + [f"comp_{i}" for i in range(1, 17)] + ["sel_region", "sel_dept", "sel_spot"]
+
+
+def charger_profil_navigateur():
+    """Lit le profil stocké dans le navigateur et l'applique une seule fois par session."""
+    if not STOCKAGE_NAVIGATEUR_DISPO or st.session_state.get("profil_applique"):
+        return
+    brut = streamlit_js_eval(
+        js_expressions="localStorage.getItem('weatherfly_profil') || ''",
+        key="chargement_profil",
+    )
+    if brut is None:
+        return  # le navigateur n'a pas encore répondu, un rerun automatique suivra
+    if brut:
+        try:
+            profil = json.loads(brut)
+            for cle in CLES_PROFIL:
+                if cle in profil and profil[cle] is not None:
+                    st.session_state[cle] = profil[cle]
+        except (json.JSONDecodeError, TypeError):
+            pass
+    st.session_state["profil_applique"] = True
+
+
+def sauvegarder_profil_navigateur():
+    """Écrit le profil courant dans le navigateur dès qu'une valeur change."""
+    if not STOCKAGE_NAVIGATEUR_DISPO or not st.session_state.get("profil_applique"):
+        return  # ne jamais écraser le profil stocké avant de l'avoir relu
+    profil = {cle: st.session_state.get(cle) for cle in CLES_PROFIL}
+    json_profil = json.dumps(profil, ensure_ascii=False)
+    if st.session_state.get("_profil_sauvegarde") == json_profil:
+        return
+    streamlit_js_eval(
+        js_expressions=f"localStorage.setItem('weatherfly_profil', {json.dumps(json_profil, ensure_ascii=False)})",
+        key=f"sauvegarde_profil_{abs(hash(json_profil))}",
+    )
+    st.session_state["_profil_sauvegarde"] = json_profil
 
 # --- 2. CHARGEMENT DE LA BASE DE DONNÉES SITES (EXCEL FFVL) ---
 # Le fichier Excel doit être posé à côté de ce script.
@@ -338,6 +385,10 @@ except Exception as e:
 nb_spots = sum(len(spots) for depts in SPOTS_HIERARCHIE.values() for spots in depts.values())
 st.caption(f"📚 Base FFVL chargée : {nb_spots} spots répartis sur {len(SPOTS_HIERARCHIE)} régions.")
 
+# Restauration du profil mémorisé (spot + compétences) depuis le navigateur
+charger_profil_navigateur()
+st.session_state.setdefault("vols_cumuls", 10)
+
 col_gauche, col_droite = st.columns([3, 2])
 
 with col_gauche:
@@ -345,53 +396,51 @@ with col_gauche:
     st.subheader("👤 1. Calculateur de Niveau Pilote")
 
     # Curseur adaptatif : pas de 1 unité de 0 à 50, puis pas de 5 unités jusqu'à 200+
-    if st.session_state.get("vols_cumuls", 10) <= 50:
-        vols = st.slider("Volume de vols cumulés :", min_value=0, max_value=200, value=10, step=1, key="vols_cumuls")
-    else:
-        vols = st.slider("Volume de vols cumulés :", min_value=0, max_value=200, value=st.session_state.vols_cumuls, step=5, key="vols_cumuls")
+    pas_vols = 1 if st.session_state["vols_cumuls"] <= 50 else 5
+    vols = st.slider("Volume de vols cumulés :", min_value=0, max_value=200, step=pas_vols, key="vols_cumuls")
 
     st.caption(get_vols_comment(vols))
 
     notes_competences = []
 
     with st.expander("🪁 Techniques au Sol"):
-        c1 = st.slider("Gonflage dos voile :", 0, 10, 0, help="De 0 (guidage requis) à 10 (pente raide/espace restreint sans vent)")
+        c1 = st.slider("Gonflage dos voile :", 0, 10, key="comp_1", help="De 0 (guidage requis) à 10 (pente raide/espace restreint sans vent)")
         st.caption(get_skill_comment(c1))
-        c2 = st.slider("Gonflage face voile :", 0, 10, 0, help="De 0 (non pratiqué) à 10 (jeu au sol instinctif dans les rafales)")
+        c2 = st.slider("Gonflage face voile :", 0, 10, key="comp_2", help="De 0 (non pratiqué) à 10 (jeu au sol instinctif dans les rafales)")
         st.caption(get_skill_comment(c2))
-        c3 = st.slider("Gonflage technique & vent fort :", 0, 10, 0, help="De 0 (danger potentiel) à 10 (haute montagne/déco engagé ou technique)")
+        c3 = st.slider("Gonflage technique & vent fort :", 0, 10, key="comp_3", help="De 0 (danger potentiel) à 10 (haute montagne/déco engagé ou technique)")
         st.caption(get_skill_comment(c3))
-        c4 = st.slider("Pré-vol et check-list de sécurité :", 0, 10, 0, help="De 0 (oublis fréquents) à 10 (rigueur absolue contre les automatismes)")
+        c4 = st.slider("Pré-vol et check-list de sécurité :", 0, 10, key="comp_4", help="De 0 (oublis fréquents) à 10 (rigueur absolue contre les automatismes)")
         st.caption(get_skill_comment(c4))
         notes_competences.extend([c1, c2, c3, c4])
 
     with st.expander("🪂 Techniques en Vol"):
-        c5 = st.slider("Gestion du plan d'approche (PTU / PTR) :", 0, 10, 0, help="De 0 (guidage requis) à 10 (précision chirurgicale tout gradient)")
+        c5 = st.slider("Gestion du plan d'approche (PTU / PTR) :", 0, 10, key="comp_5", help="De 0 (guidage requis) à 10 (précision chirurgicale tout gradient)")
         st.caption(get_skill_comment(c5))
-        c6 = st.slider("Atterrissage hors terrain (Vachage) :", 0, 10, 0, help="De 0 (à proscrire) à 10 (adaptation immédiate sur zone inconnue)")
+        c6 = st.slider("Atterrissage hors terrain (Vachage) :", 0, 10, key="comp_6", help="De 0 (à proscrire) à 10 (adaptation immédiate sur zone inconnue)")
         st.caption(get_skill_comment(c6))
-        c7 = st.slider("Virages coordonnés (roulis/tangage) :", 0, 10, 0, help="De 0 (sur-pilotage fréquent) à 10 (pilotage instinctif fluide)")
+        c7 = st.slider("Virages coordonnés (roulis/tangage) :", 0, 10, key="comp_7", help="De 0 (sur-pilotage fréquent) à 10 (pilotage instinctif fluide)")
         st.caption(get_skill_comment(c7))
-        c8 = st.slider("Pilotage actif en turbulences :", 0, 10, 0, help="De 0 (crispation aux commandes) à 10 (vol fluide en air agité)")
+        c8 = st.slider("Pilotage actif en turbulences :", 0, 10, key="comp_8", help="De 0 (crispation aux commandes) à 10 (vol fluide en air agité)")
         st.caption(get_skill_comment(c8))
-        c9 = st.slider("Gestion des incidents (fermetures) :", 0, 10, 0, help="De 0 (panique/pas de réflexe) à 10 (calme olympien, bagage SIV complet)")
+        c9 = st.slider("Gestion des incidents (fermetures) :", 0, 10, key="comp_9", help="De 0 (panique/pas de réflexe) à 10 (calme olympien, bagage SIV complet)")
         st.caption(get_skill_comment(c9))
-        c10 = st.slider("Exploitation du soaring :", 0, 10, 0, help="De 0 (vol balistique) à 10 (optimisation du relief par vent faible ou fort)")
+        c10 = st.slider("Exploitation du soaring :", 0, 10, key="comp_10", help="De 0 (vol balistique) à 10 (optimisation du relief par vent faible ou fort)")
         st.caption(get_skill_comment(c10))
-        c11 = st.slider("Exploitation des thermiques :", 0, 10, 0, help="De 0 (simple traversée) à 10 (analyse complète et montée sereine)")
+        c11 = st.slider("Exploitation des thermiques :", 0, 10, key="comp_11", help="De 0 (simple traversée) à 10 (analyse complète et montée sereine)")
         st.caption(get_skill_comment(c11))
-        c12 = st.slider("Pilotage aux arrières & accélérateur :", 0, 10, 0, help="De 0 (source d'inquiétude) à 10 (utilisation reflexe de toute la plage)")
+        c12 = st.slider("Pilotage aux arrières & accélérateur :", 0, 10, key="comp_12", help="De 0 (source d'inquiétude) à 10 (utilisation reflexe de toute la plage)")
         st.caption(get_skill_comment(c12))
         notes_competences.extend([c5, c6, c7, c8, c9, c10, c11, c12])
 
     with st.expander("🧠 Analyse & Sécurité"):
-        c13 = st.slider("Analyse de la manche à air :", 0, 10, 0, help="De 0 (lecture ardue) à 10 (décodage complet de l'environnement)")
+        c13 = st.slider("Analyse de la manche à air :", 0, 10, key="comp_13", help="De 0 (lecture ardue) à 10 (décodage complet de l'environnement)")
         st.caption(get_skill_comment(c13))
-        c14 = st.slider("Analyse météo et aérologique :", 0, 10, 0, help="De 0 (dépendance aux icônes) à 10 (compréhension fine émagramme/pièges)")
+        c14 = st.slider("Analyse météo et aérologique :", 0, 10, key="comp_14", help="De 0 (dépendance aux icônes) à 10 (compréhension fine émagramme/pièges)")
         st.caption(get_skill_comment(c14))
-        c15 = st.slider("Planification de vol (Cheminement) :", 0, 10, 0, help="De 0 (vol local strict) à 10 (gestion des espaces et secours permanents)")
+        c15 = st.slider("Planification de vol (Cheminement) :", 0, 10, key="comp_15", help="De 0 (vol local strict) à 10 (gestion des espaces et secours permanents)")
         st.caption(get_skill_comment(c15))
-        c16 = st.slider("Prise de décision & Renoncement :", 0, 10, 0, help="De 0 (effet mouton) à 10 (sagesse aéronautique, savoir dire non acquis)")
+        c16 = st.slider("Prise de décision & Renoncement :", 0, 10, key="comp_16", help="De 0 (effet mouton) à 10 (sagesse aéronautique, savoir dire non acquis)")
         st.caption(get_skill_comment(c16))
         notes_competences.extend([c13, c14, c15, c16])
 
@@ -423,9 +472,23 @@ with col_gauche:
 
     # --- SPOT & DATE ---
     st.subheader("🧭 2. Localisation du Spot & Date")
-    region_selectionnee = st.selectbox("Région :", list(SPOTS_HIERARCHIE.keys()))
-    dept_selectionne = st.selectbox("Département :", list(SPOTS_HIERARCHIE[region_selectionnee].keys()))
-    spot_name = st.selectbox("Site officiel :", list(SPOTS_HIERARCHIE[region_selectionnee][dept_selectionne].keys()))
+    # Si une valeur mémorisée n'existe plus (ex : base Excel mise à jour), on la
+    # remplace par le premier choix valide : une affectation explicite garde le
+    # widget synchronisé, contrairement à une suppression de la clé.
+    regions = list(SPOTS_HIERARCHIE.keys())
+    if st.session_state.get("sel_region") not in regions:
+        st.session_state["sel_region"] = regions[0]
+    region_selectionnee = st.selectbox("Région :", regions, key="sel_region")
+
+    departements = list(SPOTS_HIERARCHIE[region_selectionnee].keys())
+    if st.session_state.get("sel_dept") not in departements:
+        st.session_state["sel_dept"] = departements[0]
+    dept_selectionne = st.selectbox("Département :", departements, key="sel_dept")
+
+    spots = list(SPOTS_HIERARCHIE[region_selectionnee][dept_selectionne].keys())
+    if st.session_state.get("sel_spot") not in spots:
+        st.session_state["sel_spot"] = spots[0]
+    spot_name = st.selectbox("Site officiel :", spots, key="sel_spot")
 
     spot_config = SPOTS_HIERARCHIE[region_selectionnee][dept_selectionne][spot_name]
 
@@ -602,3 +665,6 @@ with col_droite:
                     st.success("🎯 **Comparaison :** L'agitation réelle sur site est parfaitement conforme aux prévisions météo (0 point d'écart).")
         else:
             st.info("ℹ️ Les données en temps réel et le bouton de rafraîchissement ne sont disponibles que pour le jour J.")
+
+# --- 6. SAUVEGARDE DU PROFIL DANS LE NAVIGATEUR ---
+sauvegarder_profil_navigateur()
