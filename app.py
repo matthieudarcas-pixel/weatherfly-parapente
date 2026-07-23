@@ -500,6 +500,12 @@ with col_gauche:
 
     # --- VERDICT METEO ---
     st.subheader("Verdict Météo & Aérologie")
+    st.warning(
+        "⚠️ **Avertissement :** cette analyse météo automatique ne dispense pas de faire son plan de vol, "
+        "de s'informer sur les spécificités du site et de vérifier la météo réelle une fois sur place. "
+        "Dans le doute, demandez des informations aux pilotes locaux — et si le doute persiste, "
+        "remettez votre vol à une autre fois."
+    )
     indice_preve_actuel = 1
 
     if analyser_clic:
